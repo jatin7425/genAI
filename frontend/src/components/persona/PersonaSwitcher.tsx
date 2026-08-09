@@ -43,10 +43,12 @@ export function PersonaSwitcher({ activePersona, onSelectPersona, onCreateNew, r
     <div className="relative mr-stack-md">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-4 py-2 hover:bg-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
+        className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-2 sm:px-4 py-2 hover:bg-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
       >
         <PersonaAvatar name={activePersona} size="w-6 h-6" />
-        <span className="font-body-md text-on-surface font-medium">{activePersona}</span>
+        <span className="hidden sm:inline font-body-md text-on-surface font-medium max-w-[120px] truncate">
+          {activePersona}
+        </span>
         <Icon name="keyboard_arrow_down" className="text-on-surface-variant" />
       </button>
 

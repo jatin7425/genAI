@@ -26,10 +26,12 @@ export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps
     <div className="relative mr-unit">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-3 py-2 hover:bg-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
+        className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-2 sm:px-3 py-2 hover:bg-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
       >
         <Icon name="tune" className="text-on-surface-variant text-[18px]" />
-        <span className="font-body-md text-on-surface font-medium text-sm">{activeModel ?? 'Model'}</span>
+        <span className="hidden sm:inline font-body-md text-on-surface font-medium text-sm max-w-[100px] truncate">
+          {activeModel ?? 'Model'}
+        </span>
         <Icon name="keyboard_arrow_down" className="text-on-surface-variant" />
       </button>
 

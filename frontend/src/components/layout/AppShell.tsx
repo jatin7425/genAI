@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { SideNav, type NavKey } from './SideNav'
 import { TopAppBar } from './TopAppBar'
-import { BottomNav } from './BottomNav'
 import type { StoredConversation } from '../../hooks/useConversationHistory'
 
 type AppShellProps = {
@@ -79,7 +78,6 @@ export function AppShell({
       <main className="flex-1 flex flex-col md:ml-80 h-full relative overflow-hidden">
         <TopAppBar onMenuClick={() => setDrawerOpen(true)} rightSlot={headerRightSlot} />
         {children}
-        <BottomNav active="chat" />
       </main>
     </div>
   )
