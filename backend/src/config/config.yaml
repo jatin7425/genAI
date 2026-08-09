@@ -1,0 +1,13 @@
+API:
+  base_url: ${LITELLM_BASE_URL}
+  master_key: ${LITELLM_MASTER_KEY}
+  Endpoints:
+    chat: /v1/chat/completions
+    embeddings: /v1/embeddings
+    models: /v1/models
+
+models:
+  embedding: embed-model
+
+flags:
+  is_terminal: true
