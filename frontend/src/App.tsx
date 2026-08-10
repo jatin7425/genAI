@@ -85,7 +85,7 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   }
 
   return (
-    <div className="h-screen w-screen relative">
+    <div className="h-dvh w-screen relative">
       <AppShell
         activeNav={navKey}
         onSelectNav={(key) => {

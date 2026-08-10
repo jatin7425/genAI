@@ -26,7 +26,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   }
 
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-background p-gutter">
+    <div className="h-dvh w-screen flex items-center justify-center bg-background p-gutter">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm bg-surface border border-outline-variant rounded-xl p-stack-md flex flex-col gap-stack-sm shadow-lg"
