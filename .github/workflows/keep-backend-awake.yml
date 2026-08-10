@@ -14,10 +14,17 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping backend health endpoint
+      - name: Ping backend health endpoints
         run: |
-          if [ -z "${{ vars.RENDER_BACKEND_URL }}" ]; then
-            echo "RENDER_BACKEND_URL repository variable is not set (Settings > Secrets and variables > Actions > Variables). Skipping ping."
+          if [ -z "${{ vars.RENDER_KEEPALIVE_URLS }}" ]; then
+            echo "RENDER_KEEPALIVE_URLS repository variable is not set (Settings > Secrets and variables > Actions > Variables). Skipping ping."
             exit 0
           fi
-          curl -fsS -m 30 "${{ vars.RENDER_BACKEND_URL }}/health" && echo "Backend is awake." || echo "Ping failed — backend may be cold-starting or down."
+
+          IFS=',' read -ra urls <<< "${{ vars.RENDER_KEEPALIVE_URLS }}"
+          for raw_url in "${urls[@]}"; do
+            url="$(echo "$raw_url" | xargs)"
+            [ -z "$url" ] && continue
+            echo "Pinging $url"
+            curl -fsS -m 30 "$url" && echo "  -> awake" || echo "  -> ping failed (cold-starting or down)"
+          done
