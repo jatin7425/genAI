@@ -14,7 +14,6 @@ type SideNavProps = {
   onOpenConversation?: (conversation: StoredConversation) => void
   onDeleteConversation?: (sessionId: string) => void
   onLogout?: () => void
-  onOpenSettings?: () => void
 }
 
 export function SideNav({
@@ -27,7 +26,6 @@ export function SideNav({
   onOpenConversation,
   onDeleteConversation,
   onLogout,
-  onOpenSettings,
 }: SideNavProps) {
   const [recentOpen, setRecentOpen] = useState(true)
 
@@ -128,13 +126,6 @@ export function SideNav({
 
       <div className="mt-auto pt-stack-md space-y-unit">
         <div className="border-t border-outline-variant pt-unit mt-unit">
-          <button
-            onClick={onOpenSettings}
-            className="w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-highest transition-all text-left"
-          >
-            <Icon name="settings" />
-            <span className="font-body-md text-body-md">Settings</span>
-          </button>
           <button
             onClick={onLogout}
             className="w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-highest transition-all text-left"

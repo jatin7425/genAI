@@ -7,11 +7,9 @@ import { LoginScreen } from './screens/LoginScreen'
 import { PersonaSwitcher } from './components/persona/PersonaSwitcher'
 import { CreatePersonaModal } from './components/persona/CreatePersonaModal'
 import { ModelSwitcher } from './components/chat/ModelSwitcher'
-import { SettingsModal } from './components/settings/SettingsModal'
 import { useChatRegistry, type ChatTurn } from './hooks/useChatRegistry'
 import { useConversationHistory, type StoredConversation } from './hooks/useConversationHistory'
 import { useAuth } from './hooks/useAuth'
-import { useDocuments } from './hooks/useDocuments'
 
 const DEFAULT_PERSONA = 'Default Assistant'
 
@@ -21,8 +19,6 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   const [activeModel, setActiveModel] = useState<string | null>(null)
   const [personaModalOpen, setPersonaModalOpen] = useState(false)
   const [personaRefreshKey, setPersonaRefreshKey] = useState(0)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const { documents, addFiles, removeDocument } = useDocuments()
 
   const {
     registry,
@@ -98,7 +94,6 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
         onOpenConversation={handleOpenConversation}
         onDeleteConversation={remove}
         onLogout={onLogout}
-        onOpenSettings={() => setSettingsOpen(true)}
         headerRightSlot={
           <div className="flex items-center">
             <ModelSwitcher activeModel={effectiveModel} onSelectModel={setActiveModel} />
@@ -138,17 +133,6 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
               setActivePersona(name)
               setPersonaModalOpen(false)
             }}
-          />
-        </div>
-      )}
-
-      {settingsOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-stack-md bg-black/60">
-          <SettingsModal
-            documents={documents}
-            onUpload={addFiles}
-            onDelete={removeDocument}
-            onClose={() => setSettingsOpen(false)}
           />
         </div>
       )}

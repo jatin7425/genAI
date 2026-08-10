@@ -13,7 +13,6 @@ type AppShellProps = {
   onOpenConversation?: (conversation: StoredConversation) => void
   onDeleteConversation?: (sessionId: string) => void
   onLogout?: () => void
-  onOpenSettings?: () => void
   children: ReactNode
 }
 
@@ -27,7 +26,6 @@ export function AppShell({
   onOpenConversation,
   onDeleteConversation,
   onLogout,
-  onOpenSettings,
   children,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -43,7 +41,6 @@ export function AppShell({
         onOpenConversation={onOpenConversation}
         onDeleteConversation={onDeleteConversation}
         onLogout={onLogout}
-        onOpenSettings={onOpenSettings}
       />
 
       {drawerOpen && (
@@ -62,10 +59,6 @@ export function AppShell({
               }}
               onDeleteConversation={onDeleteConversation}
               onLogout={onLogout}
-              onOpenSettings={() => {
-                onOpenSettings?.()
-                setDrawerOpen(false)
-              }}
               onSelect={(key) => {
                 onSelectNav?.(key)
                 setDrawerOpen(false)

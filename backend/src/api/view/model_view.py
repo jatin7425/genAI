@@ -1,9 +1,9 @@
-EXCLUDED_PREFIXES = ("embed-",)
+EXCLUDED_PREFIXES = ("embed-","transcribe-")
 
 
 class ModelService:
     """Lists chat-capable models from the LiteLLM proxy, hiding embedding
-    models (id starts with 'embed-') since those aren't valid chat targets."""
+    models (id starts with 'embed-', 'transcribe-') since those aren't valid chat targets."""
 
     def __init__(self, llm_client):
         self.llm_client = llm_client
