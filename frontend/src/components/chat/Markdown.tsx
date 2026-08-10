@@ -5,7 +5,7 @@ import { stripToolTagWrapper } from '../../utils/text'
 export function Markdown({ children }: { children: string }) {
   const content = stripToolTagWrapper(children)
   return (
-    <div className="font-body-lg text-body-lg text-on-surface [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+    <div className="font-body-lg text-body-md sm:text-body-lg text-on-surface [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
