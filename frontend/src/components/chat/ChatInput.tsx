@@ -28,9 +28,7 @@ export function ChatInput({ placeholder = 'Message Cortex...', onSend, variant =
   }
 
   const wrapperClass =
-    variant === 'floating'
-      ? 'absolute bottom-0 left-0 w-full p-gutter md:p-container-padding bg-background z-10 pb-[80px] md:pb-container-padding'
-      : 'w-full'
+    variant === 'floating' ? 'absolute bottom-0 left-0 w-full p-gutter md:p-container-padding bg-background z-10' : 'w-full'
 
   return (
     <div className={wrapperClass}>
