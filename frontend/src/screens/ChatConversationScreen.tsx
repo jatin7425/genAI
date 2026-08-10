@@ -116,7 +116,7 @@ export function ChatConversationScreen({
                   <Icon name="help" filled />
                 </div>
                 <div className="flex-1">
-                  <p className="font-body-lg text-body-lg text-on-surface">{turn.text}</p>
+                  <p className="font-body-lg text-body-md sm:text-body-lg text-on-surface">{turn.text}</p>
                 </div>
               </ChatBubble>
             )

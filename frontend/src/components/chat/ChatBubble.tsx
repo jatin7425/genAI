@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Children, type ReactNode } from 'react'
 
 type ChatBubbleProps = {
   role: 'user' | 'agent'
@@ -17,14 +17,21 @@ export function ChatBubble({ role, children, accent = false }: ChatBubbleProps) 
     )
   }
 
+  // First child is always the leading icon; the rest is the message content.
+  const [icon, ...content] = Children.toArray(children)
+
   return (
     <div className="flex justify-start w-full">
-      <div
-        className={`bg-surface border border-outline-variant p-4 rounded-xl rounded-tl-none max-w-[80%] flex items-start gap-4 shadow-sm relative overflow-hidden ${
-          accent ? 'border-l-4 border-l-tertiary' : ''
-        }`}
-      >
-        {children}
+      <div className="flex flex-col gap-1 max-w-[92%] sm:max-w-[80%]">
+        <div className="sm:hidden shrink-0 pl-1">{icon}</div>
+        <div
+          className={`bg-surface border border-outline-variant p-4 rounded-xl rounded-tl-none flex items-start gap-4 shadow-sm relative overflow-hidden ${
+            accent ? 'border-l-4 border-l-tertiary' : ''
+          }`}
+        >
+          <div className="hidden sm:block shrink-0">{icon}</div>
+          <div className="flex-1 min-w-0">{content}</div>
+        </div>
       </div>
     </div>
   )
