@@ -4,6 +4,8 @@ import time
 import bcrypt
 from fastapi import Header, HTTPException
 
+from src.api.utils.common import commonUtils
+
 INACTIVITY_TIMEOUT_SECONDS = 60 * 60  # 1 hour
 
 
@@ -22,6 +24,7 @@ class AuthService:
         self._tokens = {}  # token -> last_active_at (epoch seconds)
 
     def login(self, username, password):
+        commonUtils().wake_up_llm()
         if not self.username or not self.password_hash:
             raise HTTPException(status_code=500, detail="Auth is not configured on the server.")
         if username != self.username or not bcrypt.checkpw(password.encode(), self.password_hash):
