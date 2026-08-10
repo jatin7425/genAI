@@ -33,7 +33,7 @@ export function AppShell({
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
-    <div className="bg-background text-on-background font-body-md text-body-md overflow-hidden flex h-screen">
+    <div className="bg-background text-on-background font-body-md text-body-md overflow-hidden flex h-dvh">
       <SideNav
         active={activeNav}
         onSelect={onSelectNav}
