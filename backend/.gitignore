@@ -1,6 +1,3 @@
 .env
 *.pyc
 venv/*
-src/data/documents.json
-src/data/uploads/
-src/data/conversations.json

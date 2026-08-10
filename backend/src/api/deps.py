@@ -12,21 +12,13 @@ from src.api.view.suggestion_view import SuggestionService
 from src.config import CONFIG
 from src.utils.llm_client import llmClient
 
-IS_DEPLOYED = os.getenv("ENV", "local").strip().lower() == "deployed"
-
 # Composition root: this is the only place that needs to change to swap one
 # repository implementation for another — everything else only ever depends
 # on the repository's list/get/save/delete interface, never the storage
-# behind it. ENV picks JSON-file storage (local dev, no DB needed) or
-# MongoDB (deployed) for all three repositories at once.
-if IS_DEPLOYED:
-    from src.api.repositories.mongo.conversation_repository import MongoConversationRepository as ConversationRepository
-    from src.api.repositories.mongo.document_repository import MongoDocumentRepository as DocumentRepository
-    from src.api.repositories.mongo.persona_repository import MongoPersonaRepository as PersonaRepository
-else:
-    from src.api.repositories.conversation_repository import JSONConversationRepository as ConversationRepository
-    from src.api.repositories.document_repository import JSONDocumentRepository as DocumentRepository
-    from src.api.repositories.persona_repository import JSONPersonaRepository as PersonaRepository
+# behind it.
+from src.api.repositories.mongo.conversation_repository import MongoConversationRepository as ConversationRepository
+from src.api.repositories.mongo.document_repository import MongoDocumentRepository as DocumentRepository
+from src.api.repositories.mongo.persona_repository import MongoPersonaRepository as PersonaRepository
 
 event_broadcaster = EventBroadcaster()
 agent = orchestrator()

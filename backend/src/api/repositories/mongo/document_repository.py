@@ -4,10 +4,10 @@ from src.db import get_db
 
 
 class MongoDocumentRepository:
-    """Same contract as JSONDocumentRepository, backed by two collections:
-    `documents` (metadata + chunk embeddings) and `document_files` (raw
-    uploaded bytes) — kept separate so listing/metadata reads never have to
-    pull large binary blobs off the wire."""
+    """Stores document metadata + chunk embeddings and raw uploaded bytes
+    across two collections: `documents` (metadata + chunk embeddings) and
+    `document_files` (raw uploaded bytes) — kept separate so listing/metadata
+    reads never have to pull large binary blobs off the wire."""
 
     def __init__(self):
         db = get_db()

@@ -1,0 +1,14 @@
+services:
+  mongo:
+    image: mongodb/mongodb-atlas-local
+    container_name: atlas-local
+    ports:
+      - "27019:27017"
+    environment:
+      MONGODB_INITDB_ROOT_USERNAME: root
+      MONGODB_INITDB_ROOT_PASSWORD: secret
+    volumes:
+      - atlas-data:/data/db
+
+volumes:
+  atlas-data:

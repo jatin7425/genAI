@@ -2,8 +2,10 @@ from src.db import get_db
 
 
 class MongoConversationRepository:
-    """Same contract as JSONConversationRepository, backed by a
-    `conversations` collection instead of a JSON file."""
+    """Persists conversation history (title, persona, turns) in a
+    `conversations` collection, so 'Recent Conversations' follows the user
+    across browsers/devices instead of living only in one browser's
+    localStorage."""
 
     def __init__(self):
         self.collection = get_db()["conversations"]

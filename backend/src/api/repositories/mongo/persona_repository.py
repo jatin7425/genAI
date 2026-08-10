@@ -1,10 +1,12 @@
-from src.api.repositories.persona_repository import DEFAULT_PERSONAS, PersonaRepository
 from src.db import get_db
 
+DEFAULT_PERSONAS = {
+    "Default Assistant": "You are a helpful, direct, and friendly assistant.",
+}
 
-class MongoPersonaRepository(PersonaRepository):
-    """Same contract as JSONPersonaRepository, backed by a `personas`
-    collection instead of a JSON file. Documents are {_id: name, prompt}."""
+
+class MongoPersonaRepository:
+    """Personas backed by a `personas` collection. Documents are {_id: name, prompt}."""
 
     def __init__(self):
         self.collection = get_db()["personas"]
