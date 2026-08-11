@@ -37,6 +37,7 @@ echo "Starting backend..."
 (
   cd "$ROOT_DIR/backend"
   source venv/bin/activate
+  pip install -r requirements.txt
   uvicorn main:app --reload
 ) &
 PIDS+=($!)

@@ -11,3 +11,6 @@ pydantic
 bcrypt
 python-multipart
 pymongo
+pymupdf
+Pillow
+python-docx

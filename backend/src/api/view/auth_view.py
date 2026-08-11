@@ -2,11 +2,14 @@ import secrets
 import time
 
 import bcrypt
-from fastapi import Header, HTTPException
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.api.utils.common import commonUtils
 
 INACTIVITY_TIMEOUT_SECONDS = 60 * 60  # 1 hour
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class AuthService:
@@ -36,10 +39,10 @@ class AuthService:
     def logout(self, token):
         self._tokens.pop(token, None)
 
-    def require_auth(self, authorization: str = Header(default=None)):
-        if not authorization or not authorization.startswith("Bearer "):
+    def require_auth(self, credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+        if not credentials:
             raise HTTPException(status_code=401, detail="Missing bearer token.")
-        token = authorization.removeprefix("Bearer ")
+        token = credentials.credentials
 
         last_active = self._tokens.get(token)
         if last_active is None:

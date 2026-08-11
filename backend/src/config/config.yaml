@@ -4,6 +4,20 @@ API:
   Endpoints:
     chat: /v1/chat/completions
     models: /v1/models
+    embeddings: /v1/embeddings
 
 flags:
   is_terminal: true
+
+validation:
+  MAX_FILE_MB: 20
+  MAX_PAGES: 100
+  MAX_IMAGES: 50
+
+regex:
+  SENTENCE_END: '(?<=[.!?])\s+(?=[A-Z0-9"''“])'
+  HYPHEN_WRAP: '(\w)-\n(\w)'
+  SOFT_WRAP: '(?<!\n)\n(?!\n|\s*[•‣●\-\*]|\s*\d+[.)])'
+  MULTI_SPACE: '[ \t]+'
+  MULTI_NEWLINE: '\n{3,}'
+  PARAGRAPH: '\n\s*\n'

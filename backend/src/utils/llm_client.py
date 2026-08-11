@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 from typing import Any
 import requests
+import base64
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -17,6 +19,15 @@ class llmClient:
     def __init__(self) -> None:
         self.CONFIG: dict[str, Any] = CONFIG
         self.api_config: dict[str, Any] = self.CONFIG.get("API", {})
+        self._model_cache: list[str] | None = None
+
+    def available_models(self) -> list[str]:
+        if self._model_cache is None:
+            self._model_cache = [m["id"] for m in self.list_models()]
+        return self._model_cache 
+
+    def _valid_model(self, model: str) -> bool:
+        return model in self.available_models()
 
     def get_headers(self) -> dict[str, str]:
         master_key = self.api_config.get("master_key", "")
@@ -58,3 +69,82 @@ class llmClient:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         return response.json().get("data", [])
+
+    def image_summarizer(
+        self,
+        image: bytes,
+        mime_type: str = "image/png",
+        model: str = "gemini",
+    ) -> dict[str, Any] | None:
+
+        if not self._valid_model(model):
+            raise ValueError(
+                f"unknown model '{model}'. "
+                f"available: {self.available_models()}"
+            )
+
+        DESCRIBE_PROMPT = """Describe this image so someone can find it later by text search.
+
+            Describe only what is visibly present. If text or values are cut off, blurred, or
+            too small to read, say so instead of guessing. Do not infer purpose, cause, or
+            conclusions the image does not state.
+
+            Reproduce exactly the words shown in the image for titles, labels, axis and column
+            names, series names, units, and product or company names — those are the terms
+            people will search for.
+
+            LENGTH
+            - Images without data (photo, diagram, logo, plain screenshot): 2-4 sentences.
+            - Images carrying data (chart, graph, table, dashboard, metrics panel): up to 8
+            sentences. Use the extra room for values, not for description of the styling.
+
+            DATA IMAGES
+            State the title and what is measured, then the axes or column headers with their
+            units and range, then the values. Lead with the values.
+        """
+
+        image_base64 = base64.b64encode(image).decode("utf-8")
+
+        image_url = (
+            f"data:{mime_type};base64,{image_base64}"
+        )
+
+        payload = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": DESCRIBE_PROMPT,
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": image_url,
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
+
+        return self.call_api("chat", payload)
+
+    def embed(self, texts: list[str], model: str = "embed-cloudflare") -> list[list[float]]:
+        if not self._valid_model(model):
+            raise ValueError(
+                f"unknown model '{model}'. available: {self.available_models()}"
+            )
+        if not texts:
+            return []
+        if len(texts) > 100:
+            raise ValueError(f"batch of {len(texts)} exceeds Cloudflare's limit of 100")
+
+        payload = {"model": model, "input": texts}
+        response = self.call_api("embeddings", payload)
+
+        # sort by index — order isn't guaranteed
+        data = sorted(response["data"], key=lambda d: d["index"])
+        return [d["embedding"] for d in data]
