@@ -1,6 +1,8 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 import requests
 import base64
 from typing import Any
@@ -24,6 +26,7 @@ class llmClient:
     def available_models(self) -> list[str]:
         if self._model_cache is None:
             self._model_cache = [m["id"] for m in self.list_models()]
+        print("Avaulable Models", self._model_cache)
         return self._model_cache 
 
     def _valid_model(self, model: str) -> bool:
@@ -39,7 +42,7 @@ class llmClient:
             "Content-Type": "application/json",
         }
 
-    def get_full_url(self, endpoint_key: str) -> str:
+    def get_full_url(self, endpoint_key: str) -> str | list[str]:
         base_url = self.api_config.get("base_url", "")
         endpoints = self.api_config.get("Endpoints", {})
         endpoint_path = ""
@@ -49,26 +52,105 @@ class llmClient:
 
         if not isinstance(base_url, str):
             base_url = str(base_url)
+        
+        # Handle list of endpoints
+        if isinstance(endpoint_path, list):
+            return [f"{base_url}{path}" if isinstance(path, str) else f"{base_url}{str(path)}" 
+                    for path in endpoint_path]
+        
+        # Handle single endpoint (string)
         if not isinstance(endpoint_path, str):
             endpoint_path = str(endpoint_path)
-
+        
         return f"{base_url}{endpoint_path}"
 
-    def call_api(self, endpoint_key: str, payload: dict[str, Any]) -> dict[str, Any]:
-        url = self.get_full_url(endpoint_key)
-        headers = self.get_headers()
+    def _prepare_request(self, endpoint_key: str, payload: dict[str, Any]) -> tuple[str | list[str], dict[str, Any]]:
+        urls = self.get_full_url(endpoint_key)
+        request_payload = dict(payload)
+        model = request_payload.pop("model", None)
 
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        return response.json()
+        # Handle both string and list URLs
+        if isinstance(urls, list):
+            processed_urls = []
+            for url in urls:
+                if endpoint_key in {"chat", "embeddings"} and model is not None:
+                    separator = "&" if "?" in url else "?"
+                    url = f"{url}{separator}{urlencode({'model_name': model})}"
+                processed_urls.append(url)
+            return processed_urls, request_payload
+        else:
+            if endpoint_key in {"chat", "embeddings"} and model is not None:
+                separator = "&" if "?" in urls else "?"
+                urls = f"{urls}{separator}{urlencode({'model_name': model})}"
+            return urls, request_payload
+
+    def call_api(self, endpoint_key: str, payload: dict[str, Any]) -> dict[str, Any]:
+        urls, request_payload = self._prepare_request(endpoint_key, payload)
+        headers = self.get_headers()
+        
+        # Normalize to list
+        if isinstance(urls, str):
+            urls = [urls]
+        
+        def make_request(url: str):
+            response = requests.post(url, json=request_payload, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        
+        # Try all URLs in parallel
+        with ThreadPoolExecutor(max_workers=len(urls)) as executor:
+            futures = {executor.submit(make_request, url): url for url in urls}
+            
+            errors = []
+            # Return first successful response
+            for future in as_completed(futures):
+                try:
+                    return future.result()
+                except Exception as e:
+                    errors.append(f"{futures[future]}: {str(e)}")
+                    continue
+            
+            # All URLs failed
+            raise Exception(f"All {len(urls)} endpoints failed:\n" + "\n".join(errors))
 
     def list_models(self) -> list[dict[str, Any]]:
-        url = self.get_full_url("models")
+        urls = self.get_full_url("models")
+        
+        # Normalize to list
+        if isinstance(urls, str):
+            urls = [urls]
+        
         headers = self.get_headers()
-
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        return response.json().get("data", [])
+        
+        def fetch_url(url: str):
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Handle format 1: {"data": [{...}, ...]}
+            if "data" in data:
+                return data["data"]
+            # Handle format 2: {"model_names": [...]} - convert to list of dicts
+            elif "model_names" in data:
+                return [{"id": name} for name in data["model_names"]]
+            else:
+                return []
+        
+        # Hit all URLs in parallel
+        with ThreadPoolExecutor(max_workers=len(urls)) as executor:
+            futures = {executor.submit(fetch_url, url): url for url in urls}
+            
+            errors = []
+            # Return the first successful response
+            for future in as_completed(futures):
+                try:
+                    return future.result()
+                except Exception as e:
+                    errors.append(f"{futures[future]}: {str(e)}")
+                    continue
+            
+            # All URLs failed
+            raise Exception(f"All {len(urls)} URLs failed:\n" + "\n".join(errors))
 
     def image_summarizer(
         self,

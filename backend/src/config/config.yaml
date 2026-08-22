@@ -3,7 +3,7 @@ API:
   master_key: ${LITELLM_MASTER_KEY}
   Endpoints:
     chat: /v1/chat/completions
-    models: /v1/models
+    models: ["/v1/models","/pools"]
     embeddings: /v1/embeddings
 
 flags:

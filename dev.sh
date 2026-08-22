@@ -36,7 +36,11 @@ done
 echo "Starting backend..."
 (
   cd "$ROOT_DIR/backend"
-  source venv/bin/activate
+  if [ -f venv/Scripts/activate ]; then
+    source venv/Scripts/activate   # Windows (venv layout)
+  else
+    source venv/bin/activate       # Linux/macOS
+  fi
   pip install -r requirements.txt
   uvicorn main:app --reload
 ) &
