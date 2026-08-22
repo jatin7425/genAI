@@ -50,7 +50,7 @@ export function ChatInput({ placeholder = 'Message Cortex...', onSend, variant =
           />
           <button
             onClick={handleSend}
-            className="p-2 bg-primary-container text-on-primary-container hover:bg-primary-fixed rounded-lg transition-colors flex-shrink-0"
+            className="p-2 bg-primary-container text-on-primary-container hover:bg-primary-fixed rounded-lg transition-colors shrink-0"
           >
             <Icon name="send" filled />
           </button>
