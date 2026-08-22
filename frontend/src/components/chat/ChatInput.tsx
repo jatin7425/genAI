@@ -43,7 +43,7 @@ export function ChatInput({ placeholder = 'Message Cortex...', onSend, variant =
                 handleSend()
               }
             }}
-            className="w-full bg-transparent border-none text-on-surface font-body-md text-body-md resize-none focus:ring-0 p-2 max-h-32 overflow-y-auto"
+            className="w-full bg-transparent border-none text-on-surface font-body-md text-body-md resize-none focus:ring-0 p-2 max-h-32 overflow-y-auto focus:outline-none"
             placeholder={placeholder}
             rows={1}
             style={{ minHeight: '40px' }}
