@@ -7,15 +7,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-try:
-    from src.utils.llm_client import llmClient
-except ModuleNotFoundError:  # pragma: no cover
-    from src.utils.llm_client import llmClient
-
 import requests
 import re
 from bs4 import BeautifulSoup
 from nltk.stem import PorterStemmer
+
+try:
+    from src.utils.llm_client import llmClient
+except ModuleNotFoundError:  # pragma: no cover
+    from src.utils.llm_client import llmClient
 
 class webSearch:
     def __init__(self):
@@ -30,12 +30,28 @@ class webSearch:
         ]
         return {"User-Agent": random.choice(USER_AGENTS)}
 
-    def fetch_page(self, url):
-        response = requests.get(url, headers=self.get_random_headers())
-        if response.status_code == 200:
+    def fetch_page(self, url: str):
+        """Fetch page with proper error handling"""
+        try:
+            response = requests.get(
+                url, 
+                headers=self.get_random_headers(),
+                timeout=8  # Prevent hanging
+            )
+            response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             return soup
-        else:
+        except requests.exceptions.ConnectionError as e:
+            print(f"⚠️ Connection failed for {url}: {e}")
+            return None
+        except requests.exceptions.Timeout:
+            print(f"⚠️ Timeout for {url}")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Request error for {url}: {e}")
+            return None
+        except Exception as e:
+            print(f"⚠️ Unexpected error fetching {url}: {e}")
             return None
 
     def index_words(self, soup):
@@ -75,15 +91,37 @@ class webSearch:
                 results[word] = index[word]
         return results
 
-    def search_engine(self, url, query):
-        soup = self.fetch_page(url)
-        if soup is None:
-            return None
-        index = self.index_words(soup)
-        index = self.remove_stop_words(index)
-        index = self.apply_stemming(index)
-        results = self.search(query, index)
-        return results
+    def search_engine(self, url: str, query: str) -> dict:
+        """Search page with graceful error handling"""
+        try:
+            soup = self.fetch_page(url)
+            
+            if soup is None:
+                return {
+                    "status": "failed",
+                    "error": f"Could not fetch {url}",
+                    "matches": {}
+                }
+            
+            index = self.index_words(soup)
+            index = self.remove_stop_words(index)
+            index = self.apply_stemming(index)
+            results = self.search(query, index)
+            
+            return {
+                "status": "success",
+                "url": url,
+                "matches": results,
+                "total_matches": sum(results.values())
+            }
+            
+        except Exception as e:
+            print(f"❌ search_engine error: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "matches": {}
+            }
 
     def _is_mostly_non_latin(self, text, threshold=0.3):
         if not text:
@@ -95,11 +133,15 @@ class webSearch:
         return (non_latin / len(letters)) > threshold
 
     def duckduckgo_search(self, query, max_results=10):
-        with DDGS() as ddgs:
-            results = []
-            for r in ddgs.text(query, max_results=max_results):
-                title, snippet = r["title"], r["body"]
-                if self._is_mostly_non_latin(title) or self._is_mostly_non_latin(snippet):
-                    snippet = "[snippet omitted: non-English/irrelevant content, skip this result]"
-                results.append({"title": title, "link": r["href"], "snippet": snippet})
-            return results
+        try:
+            with DDGS() as ddgs:
+                results = []
+                for r in ddgs.text(query, max_results=max_results):
+                    title, snippet = r["title"], r["body"]
+                    if self._is_mostly_non_latin(title) or self._is_mostly_non_latin(snippet):
+                        snippet = "[snippet omitted: non-English/irrelevant content, skip this result]"
+                    results.append({"title": title, "link": r["href"], "snippet": snippet})
+                return results
+        except Exception as e:
+            print(f"⚠️ DuckDuckGo search failed: {e}")
+            return []
