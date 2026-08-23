@@ -11,6 +11,7 @@ export type ChatDonePayload = {
 export type ChatStreamHandlers = {
   onSession?: (sessionId: string) => void
   onThinking?: (content: string) => void
+  onToken?: (chunk: string) => void
   onQuestion?: (question: string) => void
   onDone?: (payload: ChatDonePayload) => void
   onError?: (error: Error) => void

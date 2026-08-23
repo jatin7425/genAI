@@ -22,7 +22,7 @@ export async function streamChat(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, message, persona, model, retry: retry ?? false }),
       signal,
-    })
+    }, true)
 
     if (!res.ok || !res.body) {
       throw new Error(`Chat request failed: ${res.status}`)
@@ -32,6 +32,7 @@ export async function streamChat(
       const payload = JSON.parse(data)
       if (event === 'session') handlers.onSession?.(payload.session_id)
       else if (event === 'thinking') handlers.onThinking?.(payload.content)
+      else if (event === 'token') handlers.onToken?.(payload.content)
       else if (event === 'question') handlers.onQuestion?.(payload.question)
       else if (event === 'done') handlers.onDone?.(payload)
     })

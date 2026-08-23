@@ -2,12 +2,12 @@ import { getToken, notifyUnauthorized } from '../utils/authToken'
 import { showLoader, hideLoader } from '../utils/loaderState'
 
 /** fetch wrapper that attaches the bearer token and clears/broadcasts on 401. */
-export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+export async function authFetch(url: string, init: RequestInit = {}, hideGlobalLoader = false): Promise<Response> {
   const token = getToken()
   const headers = new Headers(init.headers)
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  showLoader()
+  if (!hideGlobalLoader) showLoader()
   try {
     const res = await fetch(url, { ...init, headers })
 
@@ -23,6 +23,6 @@ export async function authFetch(url: string, init: RequestInit = {}): Promise<Re
 
     return res
   } finally {
-    hideLoader()
+    if (!hideGlobalLoader) hideLoader()
   }
 }

@@ -18,13 +18,13 @@ export type PaginatedResponse<T> = {
 }
 
 export async function fetchConversations(skip = 0, limit = 20): Promise<PaginatedResponse<ServerConversation>> {
-  const res = await authFetch(`${API_V1}/conversations?skip=${skip}&limit=${limit}`)
+  const res = await authFetch(`${API_V1}/conversations?skip=${skip}&limit=${limit}`, {}, true)
   if (!res.ok) throw new Error(`Failed to fetch conversations: ${res.status}`)
   return res.json()
 }
 
 export async function fetchConversationMessages(sessionId: string, skip = 0, limit = 20): Promise<PaginatedResponse<ChatTurn>> {
-  const res = await authFetch(`${API_V1}/conversations/${encodeURIComponent(sessionId)}/messages?skip=${skip}&limit=${limit}`)
+  const res = await authFetch(`${API_V1}/conversations/${encodeURIComponent(sessionId)}/messages?skip=${skip}&limit=${limit}`, {}, true)
   if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`)
   return res.json()
 }
@@ -39,11 +39,11 @@ export async function upsertConversation(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ persona, model, turns }),
-  })
+  }, true)
   if (!res.ok) throw new Error(`Failed to save conversation: ${res.status}`)
 }
 
 export async function deleteConversation(sessionId: string): Promise<void> {
-  const res = await authFetch(`${API_V1}/conversations/${encodeURIComponent(sessionId)}`, { method: 'DELETE' })
+  const res = await authFetch(`${API_V1}/conversations/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }, true)
   if (!res.ok) throw new Error(`Failed to delete conversation: ${res.status}`)
 }

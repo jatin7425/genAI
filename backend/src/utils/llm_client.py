@@ -67,22 +67,14 @@ class llmClient:
     def _prepare_request(self, endpoint_key: str, payload: dict[str, Any]) -> tuple[str | list[str], dict[str, Any]]:
         urls = self.get_full_url(endpoint_key)
         request_payload = dict(payload)
+        
+        # Some proxies (like lite-llm-js) expect 'model_name' instead of 'model'.
+        # Passing both can confuse the underlying provider.
         model = request_payload.pop("model", None)
+        if model is not None and endpoint_key in {"chat", "embeddings"}:
+            request_payload["model_name"] = model
 
-        # Handle both string and list URLs
-        if isinstance(urls, list):
-            processed_urls = []
-            for url in urls:
-                if endpoint_key in {"chat", "embeddings"} and model is not None:
-                    separator = "&" if "?" in url else "?"
-                    url = f"{url}{separator}{urlencode({'model_name': model})}"
-                processed_urls.append(url)
-            return processed_urls, request_payload
-        else:
-            if endpoint_key in {"chat", "embeddings"} and model is not None:
-                separator = "&" if "?" in urls else "?"
-                urls = f"{urls}{separator}{urlencode({'model_name': model})}"
-            return urls, request_payload
+        return urls, request_payload
 
     def call_api(self, endpoint_key: str, payload: dict[str, Any]) -> dict[str, Any]:
         urls, request_payload = self._prepare_request(endpoint_key, payload)
@@ -93,7 +85,7 @@ class llmClient:
             urls = [urls]
         
         def make_request(url: str):
-            response = requests.post(url, json=request_payload, headers=headers)
+            response = requests.post(url, json=request_payload, headers=headers, timeout=60)
             response.raise_for_status()
             return response.json()
         
@@ -112,6 +104,84 @@ class llmClient:
             
             # All URLs failed
             raise Exception(f"All {len(urls)} endpoints failed:\n" + "\n".join(errors))
+
+    def call_api_stream(self, endpoint_key: str, payload: dict[str, Any]):
+        """Like call_api but sends stream=True and yields parsed delta dicts.
+
+        Each yielded dict is one choice delta from the OpenAI SSE format:
+            {"content": "...", "tool_calls": [...], "finish_reason": "..."}
+
+        The caller is responsible for accumulating content / tool_call deltas.
+        Falls back to first working URL (no parallel race for streaming).
+        """
+        import json as _json
+
+        stream_payload = dict(payload)
+        stream_payload["stream"] = True
+
+        urls, request_payload = self._prepare_request(endpoint_key, stream_payload)
+        headers = self.get_headers()
+
+        if isinstance(urls, str):
+            urls = [urls]
+
+        last_error: Exception | None = None
+        for url in urls:
+            try:
+                response = requests.post(url, json=request_payload, headers=headers, stream=True, timeout=60)
+                response.raise_for_status()
+
+                # tool_calls accumulator: list[dict] indexed by tool call index
+                accumulated_tool_calls: list[dict] = []
+
+                for raw_line in response.iter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = _json.loads(data_str)
+                    except _json.JSONDecodeError:
+                        continue
+
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {})
+                    finish_reason = choices[0].get("finish_reason")
+
+                    # Accumulate tool_call deltas (index-keyed)
+                    for tc_delta in delta.get("tool_calls", []):
+                        idx = tc_delta.get("index", 0)
+                        while len(accumulated_tool_calls) <= idx:
+                            accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                        tc = accumulated_tool_calls[idx]
+                        if tc_delta.get("id"):
+                            tc["id"] = tc_delta["id"]
+                        fn = tc_delta.get("function", {})
+                        if fn.get("name"):
+                            tc["function"]["name"] += fn["name"]
+                        if fn.get("arguments"):
+                            tc["function"]["arguments"] += fn["arguments"]
+
+                    yield {
+                        "content": delta.get("content"),
+                        "reasoning_content": delta.get("reasoning_content"),
+                        "tool_calls_delta": delta.get("tool_calls"),
+                        "accumulated_tool_calls": accumulated_tool_calls if accumulated_tool_calls else None,
+                        "finish_reason": finish_reason,
+                    }
+                return  # success — stop trying other URLs
+            except Exception as e:
+                last_error = e
+                continue
+
+        raise Exception(f"All streaming endpoints failed. Last error: {last_error}")
+
 
     def list_models(self) -> list[dict[str, Any]]:
         urls = self.get_full_url("models")

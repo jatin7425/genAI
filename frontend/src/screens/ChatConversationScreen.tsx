@@ -5,13 +5,14 @@ import { ChatBubble } from '../components/chat/ChatBubble'
 import { LiveThinkingTrace } from '../components/chat/LiveThinkingTrace'
 import { ChatInput } from '../components/chat/ChatInput'
 import { Markdown } from '../components/chat/Markdown'
+import { stripToolTagWrapper } from '../utils/text'
 import type { ChatOutletContext } from '../layouts/ChatLayout'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 import { fetchConversationMessages } from '../api/conversations'
 
 export function ChatConversationScreen() {
   const { sessionId } = useParams<{ sessionId?: string }>()
-  const { turns, thinking, status, awaitingAnswer, onSend, onEditLastMessage, onRetry, injectOlderTurns, isReady } =
+  const { turns, thinking, status, awaitingAnswer, onSend, onStop, onEditLastMessage, onRetry, injectOlderTurns, isReady } =
     useOutletContext<ChatOutletContext>()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -59,6 +60,24 @@ export function ChatConversationScreen() {
     }
   }, [isReady, sessionId, turns.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [showScrollButton, setShowScrollButton] = useState(false)
+  const isAutoScrolling = useRef(true)
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+    isAutoScrolling.current = isAtBottom
+    setShowScrollButton(!isAtBottom)
+  }
+
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+      isAutoScrolling.current = true
+      setShowScrollButton(false)
+    }
+  }
+
   // Scroll restoration or auto-scroll to bottom
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -70,8 +89,8 @@ export function ChatConversationScreen() {
       const heightDifference = newHeight - previousScrollHeight.current
       el.scrollTop += heightDifference
       previousScrollHeight.current = 0
-    } else {
-      // Auto-scroll to bottom for new messages or thinking
+    } else if (isAutoScrolling.current) {
+      // Auto-scroll to bottom for new messages or thinking ONLY if user hasn't scrolled up
       el.scrollTop = el.scrollHeight
     }
   }, [turns, thinking, status])
@@ -89,7 +108,16 @@ export function ChatConversationScreen() {
 
   return (
     <div className="flex-1 flex flex-col relative overflow-hidden bg-background">
-      <div ref={scrollRef} className="chat-scroll overflow-y-auto p-container-padding pb-stack-lg h-full">
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-24 right-1/2 translate-x-1/2 md:translate-x-0 md:right-8 bg-surface-container-high hover:bg-surface-container-highest text-on-surface p-2 rounded-full shadow-lg border border-outline-variant transition-all z-10 flex items-center justify-center animate-in fade-in zoom-in duration-200"
+          title="Scroll to bottom"
+        >
+          <Icon name="arrow_downward" className="text-[20px]" />
+        </button>
+      )}
+      <div ref={scrollRef} onScroll={handleScroll} className="chat-scroll overflow-y-auto p-container-padding pb-stack-lg h-full">
         <div className="max-w-4xl mx-auto w-full flex-1 space-y-stack-md ">
           {hasMore && (
             <div ref={observerTarget} className="py-2 text-center text-secondary text-sm">
@@ -169,59 +197,106 @@ export function ChatConversationScreen() {
             const failed = turn.status !== 'done'
 
             return (
-              <div key={turn.id} className="flex flex-col gap-1">
+              <div key={turn.id} className="group flex flex-col gap-1">
                 <ChatBubble role="agent" accent={failed}>
-                  <div className="shrink-0 mt-1" style={{ color: turn.status === 'done' ? 'inherit' : undefined }}>
-                    <Icon
-                      name={turn.status === 'done' ? 'smart_toy' : 'error'}
-                      filled
-                      className={turn.status === 'done' ? 'text-secondary' : 'text-error'}
-                    />
-                  </div>
                   <div className="flex-1 min-w-0">
                     <Markdown>{turn.text}</Markdown>
                   </div>
                 </ChatBubble>
-                {isLastTurn && failed && canEditOrRetry && (
-                  <button
-                    onClick={onRetry}
-                    className="self-start flex items-center gap-1 px-2 py-1 text-xs text-on-surface-variant hover:text-on-surface transition-all"
-                  >
-                    <Icon name="refresh" className="text-[14px]" />
-                    Retry
-                  </button>
-                )}
+                <AgentActionButtons
+                  text={turn.text}
+                  onRetry={onRetry}
+                  showRetry={isLastTurn && canEditOrRetry}
+                  isFailed={failed}
+                />
               </div>
             )
           })}
 
-          {status === 'streaming' && <LiveThinkingTrace lines={thinking} />}
+          {status === 'streaming' && !turns.some((t) => t.kind === 'agent' && t.streaming) && (
+            <LiveThinkingTrace lines={thinking} />
+          )}
         </div>
       </div>
 
-      <ChatInputBar onSend={onSend} disabled={status === 'streaming'} awaitingAnswer={awaitingAnswer} />
+      <ChatInputBar onSend={onSend} onStop={onStop} status={status} awaitingAnswer={awaitingAnswer} />
     </div>
   )
 }
 
 function ChatInputBar({
   onSend,
-  disabled,
+  onStop,
+  status,
   awaitingAnswer,
 }: {
   onSend: (text: string) => void
-  disabled: boolean
+  onStop: () => void
+  status: 'idle' | 'streaming'
   awaitingAnswer: boolean
 }) {
   return (
     <div className="p-container-padding bg-background border-t border-outline-variant">
-      <div className="max-w-4xl mx-auto w-full">
+      <div className="max-w-7xl mx-auto w-full">
         <ChatInput
           variant="inline"
           placeholder={awaitingAnswer ? 'Type your answer here...' : 'Message Cortex...'}
-          onSend={disabled ? undefined : onSend}
+          onSend={onSend}
+          onStop={onStop}
+          isStreaming={status === 'streaming'}
         />
       </div>
+    </div>
+  )
+}
+
+function AgentActionButtons({
+  text,
+  onRetry,
+  showRetry,
+  isFailed,
+}: {
+  text: string
+  onRetry: () => void
+  showRetry: boolean
+  isFailed: boolean
+}) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      // Strip thinking blocks and tool wrappers before copying
+      let contentToCopy = stripToolTagWrapper(text)
+      contentToCopy = contentToCopy.replace(/((?:🤔 \*\*Thinking Process:\*\*|🔍 \*\*Web Search Thinking:\*\*)\n(?:> .*(?:\n|$))+)/g, '').trim()
+      
+      await navigator.clipboard.writeText(contentToCopy)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (e) {
+      console.error('Failed to copy', e)
+    }
+  }
+
+  return (
+    <div className={`flex items-center gap-2 mt-1 transition-opacity ${isFailed ? 'opacity-100' : 'opacity-0 md:opacity-0 group-hover:opacity-100'}`}>
+      <button
+        onClick={handleCopy}
+        className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-md transition-colors"
+        title="Copy to clipboard"
+      >
+        <Icon name={copied ? 'check' : 'content_copy'} className="text-[16px]" />
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+      {showRetry && (
+        <button
+          onClick={onRetry}
+          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-md transition-colors"
+          title="Regenerate response"
+        >
+          <Icon name="refresh" className="text-[16px]" />
+          Try again
+        </button>
+      )}
     </div>
   )
 }

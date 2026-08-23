@@ -22,8 +22,8 @@ export type PaginatedResponse<T> = {
 }
 
 export async function fetchDocuments(skip = 0, limit = 20): Promise<PaginatedResponse<APIDocument>> {
-  const res = await authFetch(`${API_V1}/documents/list?skip=${skip}&limit=${limit}`)
-  if (!res.ok) throw new Error('Failed to fetch documents')
+  const res = await authFetch(`${API_V1}/documents/list?skip=${skip}&limit=${limit}`, {}, true)
+  if (!res.ok) throw new Error(`Failed to fetch documents: ${res.status}`)
   return res.json()
 }
 
@@ -31,7 +31,7 @@ export async function deleteDocument(docId: string): Promise<void> {
   const res = await authFetch(`${API_V1}/documents/delete?doc_id=${docId}`, {
     method: 'DELETE',
   })
-  if (!res.ok) throw new Error('Failed to delete document')
+  if (!res.ok) throw new Error(`Failed to delete document: ${res.status}`)
 }
 
 export type APIChunk = {
@@ -45,7 +45,7 @@ export type APIChunk = {
 }
 
 export async function fetchDocumentChunks(docId: string, skip = 0, limit = 20): Promise<PaginatedResponse<APIChunk>> {
-  const res = await authFetch(`${API_V1}/documents/chunks/list/${docId}?skip=${skip}&limit=${limit}`)
-  if (!res.ok) throw new Error('Failed to fetch chunks')
+  const res = await authFetch(`${API_V1}/documents/chunks/list/${docId}?skip=${skip}&limit=${limit}`, {}, true)
+  if (!res.ok) throw new Error(`Failed to fetch document chunks: ${res.status}`)
   return res.json()
 }

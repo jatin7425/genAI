@@ -20,7 +20,7 @@ class orchestrator:
         self.max_iterations = max_iterations
 
     def _tools(self):
-        return self.agent_factory.agents_list() + CommonTools._tool() + [CommonTools.response_format()]
+        return self.agent_factory.agents_list() + CommonTools._tool()
 
     def system_message(self, max_iterations, persona_prompt=None):
         base = textwrap.dedent(f"""\
@@ -42,10 +42,10 @@ class orchestrator:
             single clear question and nothing else in that turn, then wait for
             their reply before continuing.
 
-            When a task required tools or delegation, call submit_answer with
-            your answer, the sources actually used, and your confidence, once
-            you have enough information. Never fabricate answers, sources, or
-            facts that didn't come from a delegated agent or tool result.
+            When you have enough information to answer the user's request, provide
+            your final answer directly in your message. If you used tools or
+            delegation, you may list the sources at the bottom of your message.
+            Never fabricate answers or facts.
             """)
         if persona_prompt:
             return f"{persona_prompt.strip()}\n\n{base}"
@@ -57,10 +57,20 @@ class orchestrator:
             "content": self.system_message(max_iterations or self.max_iterations, persona_prompt),
         }
 
-    def run(self, messages, max_iterations=None, on_event=None, model=None):
+    def run(
+        self,
+        messages,
+        max_iterations=None,
+        on_event=None,
+        on_token=None,
+        model=None,
+        extra_tools=None,
+        extra_tool_dispatch=None
+    ):
+        """Run the agentic loop."""
         if not max_iterations:
             max_iterations = self.max_iterations
-        tools = self._tools()
+        tools = self._tools() + (extra_tools or [])
         model = model or "nvidia"
 
         def emit(kind, content):
@@ -68,25 +78,81 @@ class orchestrator:
                 on_event(kind, content)
 
         for _ in range(max_iterations):
-            response = self.llm_client.call_api("chat", {
-                "model": model,
-                "messages": messages,
-                "tools": tools,
-            })
-            if "choices" not in response:
-                return {"status": "error", "answer": None, "sources": [], "confidence": "low",
-                        "note": f"LLM call failed: {response}"}
-            message = response["choices"][0]["message"]
-            messages.append(message)
+            # --- Stream one LLM turn -------------------------------------------
+            accumulated_content = ""
+            final_tool_calls = None
 
-            tool_calls = message.get("tool_calls")
-            if not tool_calls:
-                emit("answer", message.get("content"))
-                return {"status": "done", "answer": message.get("content"), "sources": [], "confidence": "unknown"}
+            in_think_block = False
 
-            for call in tool_calls:
+            try:
+                for delta in self.llm_client.call_api_stream("chat", {
+                    "model": model,
+                    "messages": messages,
+                    "tools": tools,
+                }):
+                    reasoning_text = delta.get("reasoning_content") or ""
+                    if reasoning_text:
+                        if not in_think_block:
+                            prefix = "🤔 **Thinking Process:**\n> "
+                            accumulated_content += prefix
+                            if on_token:
+                                on_token(prefix)
+                            in_think_block = True
+                        
+                        formatted = reasoning_text.replace("\n", "\n> ")
+                        accumulated_content += formatted
+                        if on_token:
+                            on_token(formatted)
+                    
+                    chunk_text = delta.get("content") or ""
+                    if chunk_text:
+                        if in_think_block:
+                            suffix = "\n\n"
+                            accumulated_content += suffix
+                            if on_token:
+                                on_token(suffix)
+                            in_think_block = False
+                        
+                        accumulated_content += chunk_text
+                        if on_token:
+                            on_token(chunk_text)
+
+                    # Keep the latest accumulated tool_calls snapshot
+                    if delta.get("accumulated_tool_calls"):
+                        final_tool_calls = delta["accumulated_tool_calls"]
+
+            except Exception as exc:
+                return {
+                    "status": "error",
+                    "answer": None,
+                    "sources": [],
+                    "confidence": "low",
+                    "note": f"LLM stream failed: {exc}",
+                }
+
+            # Build the assistant message to append to history
+            assistant_msg: dict = {"role": "assistant", "content": accumulated_content or None}
+            if final_tool_calls:
+                assistant_msg["tool_calls"] = final_tool_calls
+            messages.append(assistant_msg)
+
+            # --- No tool calls → direct answer ---------------------------------
+            if not final_tool_calls:
+                emit("answer", accumulated_content)
+                return {
+                    "status": "done",
+                    "answer": accumulated_content,
+                    "sources": [],
+                    "confidence": "unknown",
+                }
+
+            # --- Execute each tool call ----------------------------------------
+            for call in final_tool_calls:
                 name = call["function"]["name"]
-                args = json.loads(call["function"]["arguments"])
+                try:
+                    args = json.loads(call["function"]["arguments"])
+                except json.JSONDecodeError:
+                    args = {}
 
                 if name == "submit_answer":
                     emit("answer", args.get("answer"))
@@ -94,9 +160,14 @@ class orchestrator:
 
                 emit("thinking", f"Calling {name}({json.dumps(args)})")
                 if name in self.agent_factory.agents_list_names():
-                    result = self.agent_factory.call_agents(name, **args)
+                    result = self.agent_factory.call_agents(name, on_token=on_token, on_event=emit, **args)
                 elif name in self.common_tools.tool_list():
                     result = self.common_tools.call_tool(name, args)
+                elif extra_tool_dispatch and name in extra_tool_dispatch:
+                    try:
+                        result = extra_tool_dispatch[name](**args)
+                    except Exception as e:
+                        result = {"error": f"{name} failed: {e}"}
                 else:
                     result = {"error": f"unknown tool {name}"}
                 emit("thinking", f"{name} → {json.dumps(result)[:500]}")
@@ -107,8 +178,13 @@ class orchestrator:
                     "content": json.dumps(result),
                 })
 
-        return {"status": "max_iterations", "answer": None, "sources": [], "confidence": "low",
-                "note": "max iterations reached"}
+        return {
+            "status": "max_iterations",
+            "answer": None,
+            "sources": [],
+            "confidence": "low",
+            "note": "max iterations reached",
+        }
 
 
 if __name__ == "__main__":

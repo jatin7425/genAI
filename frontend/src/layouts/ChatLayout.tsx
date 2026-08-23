@@ -12,6 +12,7 @@ const DEFAULT_PERSONA = 'Default Assistant'
 
 export type ChatOutletContext = {
   onSend: (text: string) => void
+  onStop: () => void
   onSelectPrompt: (title: string) => void
   onEditLastMessage: (newText: string) => void
   onRetry: () => void
@@ -40,6 +41,7 @@ export function ChatLayout() {
     startNewChat,
     openConversation,
     sendMessage,
+    stopMessage,
     injectOlderTurns,
     markRemoteStreaming,
     appendRemoteThinking,
@@ -136,6 +138,9 @@ export function ChatLayout() {
 
   const outletContext: ChatOutletContext = {
     onSend: (text) => sendMessage(text, effectivePersona, effectiveModel),
+    onStop: () => {
+      if (activeKey) stopMessage(activeKey)
+    },
     onSelectPrompt: (title) => sendMessage(title, effectivePersona, effectiveModel),
     onEditLastMessage: handleEditLastMessage,
     onRetry: handleRetry,

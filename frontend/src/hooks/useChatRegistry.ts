@@ -5,7 +5,7 @@ import { stripToolTagWrapper } from '../utils/text'
 
 export type ChatTurn =
   | { kind: 'user'; id: string; text: string }
-  | { kind: 'agent'; id: string; text: string; status: ChatDonePayload['status'] }
+  | { kind: 'agent'; id: string; text: string; status: ChatDonePayload['status']; streaming?: boolean }
   | { kind: 'question'; id: string; text: string }
 
 let idCounter = 0
@@ -59,6 +59,7 @@ export function useChatRegistry() {
   const [registry, setRegistry] = useState<Record<string, ConversationRuntime>>({})
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const locallyDrivenRef = useRef<Set<string>>(new Set())
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map())
 
   const startNewChat = useCallback(() => {
     setActiveKey(null)
@@ -72,6 +73,29 @@ export function useChatRegistry() {
     setActiveKey(sessionId)
   }, [])
 
+  const stopMessage = useCallback((sessionId: string) => {
+    const controller = abortControllersRef.current.get(sessionId)
+    if (controller) {
+      controller.abort()
+      abortControllersRef.current.delete(sessionId)
+      
+      setRegistry((prev) => {
+        const entry = prev[sessionId]
+        if (!entry) return prev
+        return {
+          ...prev,
+          [sessionId]: {
+            ...entry,
+            status: 'idle',
+            turns: [...entry.turns, { kind: 'agent', id: nextId(), text: '\n\n*Stream stopped.*', status: 'done', streaming: false }],
+            dirty: true,
+          }
+        }
+      })
+      locallyDrivenRef.current.delete(sessionId)
+    }
+  }, [])
+
   const sendMessage = useCallback(
     (text: string, persona: string, model: string | null, options?: { retry?: boolean }) => {
       const trimmed = text.trim()
@@ -79,6 +103,9 @@ export function useChatRegistry() {
 
       const key = activeKey ?? crypto.randomUUID()
       if (activeKey === null) setActiveKey(key)
+
+      const controller = new AbortController()
+      abortControllersRef.current.set(key, controller)
 
       setRegistry((prev) => {
         const base = prev[key] ?? EMPTY_RUNTIME(persona, model)
@@ -99,7 +126,6 @@ export function useChatRegistry() {
 
       let effectiveKey = key
       locallyDrivenRef.current.add(effectiveKey)
-      const controller = new AbortController()
 
       const patch = (updater: (r: ConversationRuntime) => ConversationRuntime) => {
         setRegistry((prev) => {
@@ -109,15 +135,17 @@ export function useChatRegistry() {
         })
       }
 
-      const finishLocalDrive = () => locallyDrivenRef.current.delete(effectiveKey)
+      const finishLocalDrive = () => {
+        locallyDrivenRef.current.delete(effectiveKey)
+        abortControllersRef.current.delete(effectiveKey)
+      }
+
+      let streamingTurnId: string | null = null
 
       void streamChat(
-        { sessionId: registry[key]?.sessionId ?? null, message: trimmed, persona, model, retry: options?.retry },
+        { sessionId: registry[key]?.sessionId ?? key, message: trimmed, persona, model, retry: options?.retry },
         {
           onSession: (newSessionId) => {
-            // capture the pre-rekey key now — `effectiveKey` is mutated synchronously
-            // below, but the setRegistry updater below runs later (React defers it),
-            // so it would otherwise see the already-mutated value instead of the old one.
             const oldKey = effectiveKey
             setRegistry((prev) => {
               if (oldKey === newSessionId) return prev
@@ -130,10 +158,39 @@ export function useChatRegistry() {
             setActiveKey((prevActive) => (prevActive === oldKey ? newSessionId : prevActive))
             locallyDrivenRef.current.delete(oldKey)
             locallyDrivenRef.current.add(newSessionId)
+            
+            const oldController = abortControllersRef.current.get(oldKey)
+            if (oldController) {
+               abortControllersRef.current.set(newSessionId, oldController)
+               abortControllersRef.current.delete(oldKey)
+            }
+            
             effectiveKey = newSessionId
           },
           onThinking: (content) => {
             patch((r) => ({ ...r, thinking: [...r.thinking, content] }))
+          },
+          onToken: (chunk) => {
+            if (!streamingTurnId) {
+              const id = nextId()
+              streamingTurnId = id
+              patch((r) => ({
+                ...r,
+                thinking: [], // clear thinking trace once tokens start flowing
+                turns: [...r.turns, { kind: 'agent', id, text: chunk, status: 'done', streaming: true }],
+              }))
+            } else {
+              // Subsequent tokens — append to the existing streaming turn
+              const targetId = streamingTurnId
+              patch((r) => ({
+                ...r,
+                turns: r.turns.map((t) =>
+                  t.kind === 'agent' && t.id === targetId
+                    ? { ...t, text: t.text + chunk }
+                    : t,
+                ),
+              }))
+            }
           },
           onQuestion: (question) => {
             patch((r) => ({
@@ -146,21 +203,35 @@ export function useChatRegistry() {
             finishLocalDrive()
           },
           onDone: (payload) => {
-            patch((r) => ({
-              ...r,
-              turns: [
-                ...r.turns,
-                {
-                  kind: 'agent',
-                  id: nextId(),
-                  text: stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.'),
-                  status: payload.status,
-                },
-              ],
-              awaitingAnswer: false,
-              status: 'idle',
-              dirty: true,
-            }))
+            const finalText = stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.')
+            const targetId = streamingTurnId
+            patch((r) => {
+              if (targetId) {
+                // Replace the streaming turn in-place with the finalized version
+                return {
+                  ...r,
+                  turns: r.turns.map((t) =>
+                    t.kind === 'agent' && t.id === targetId
+                      ? { ...t, text: finalText, status: payload.status, streaming: false }
+                      : t,
+                  ),
+                  awaitingAnswer: false,
+                  status: 'idle',
+                  dirty: true,
+                }
+              }
+              // Fallback: no streaming turns received (e.g. tool-only response)
+              return {
+                ...r,
+                turns: [
+                  ...r.turns,
+                  { kind: 'agent', id: nextId(), text: finalText, status: payload.status },
+                ],
+                awaitingAnswer: false,
+                status: 'idle',
+                dirty: true,
+              }
+            })
             finishLocalDrive()
           },
           onError: (error) => {
@@ -275,6 +346,7 @@ export function useChatRegistry() {
     startNewChat,
     openConversation,
     sendMessage,
+    stopMessage,
     injectOlderTurns,
     markRemoteStreaming,
     appendRemoteThinking,

@@ -13,7 +13,7 @@ export type ConversationEventHandlers = {
 
 /** Long-lived SSE connection — resolves when the stream ends (error, server restart, etc). */
 export async function streamConversationEvents(handlers: ConversationEventHandlers, signal?: AbortSignal): Promise<void> {
-  const res = await authFetch(`${API_V1}/conversations/stream`, { signal })
+  const res = await authFetch(`${API_V1}/conversations/stream`, { signal }, true)
   if (!res.ok || !res.body) throw new Error(`Conversation stream failed: ${res.status}`)
 
   await readSseStream(res, ({ event, data }) => {

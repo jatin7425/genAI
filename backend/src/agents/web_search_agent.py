@@ -103,7 +103,7 @@ class WebSearchAgent:
             titles, or facts that didn't come from a tool result.
             """)
 
-    def web_search_agent(self,query, max_iterations=None):
+    def web_search_agent(self, query, max_iterations=None, on_token=None, on_event=None):
         if not max_iterations:
             max_iterations = self.max_iterations
         tools = self._tool() + [CommonTools().response_format()]
@@ -112,16 +112,56 @@ class WebSearchAgent:
             {"role": "user", "content": query},
         ]
 
+        def emit(kind, content):
+            if on_event:
+                on_event(kind, content)
+
         for _ in range(max_iterations):
-            response = self.llm_client.call_api("chat", {
-                "model": "nvidia",
-                "messages": messages,
-                "tools": tools,
-            })
-            if "choices" not in response:
-                return {"answer": None, "sources": [], "confidence": "low",
-                        "note": f"LLM call failed: {response}"}
-            message = response["choices"][0]["message"]
+            accumulated_content = ""
+            final_tool_calls = None
+            in_think_block = False
+
+            try:
+                for delta in self.llm_client.call_api_stream("chat", {
+                    "model": "nvidia",
+                    "messages": messages,
+                    "tools": tools,
+                }):
+                    reasoning_text = delta.get("reasoning_content") or ""
+                    if reasoning_text:
+                        if not in_think_block:
+                            prefix = "\n\n🔍 **Web Search Thinking:**\n> "
+                            accumulated_content += prefix
+                            if on_token:
+                                on_token(prefix)
+                            in_think_block = True
+                        
+                        formatted = reasoning_text.replace("\n", "\n> ")
+                        accumulated_content += formatted
+                        if on_token:
+                            on_token(formatted)
+                    
+                    chunk_text = delta.get("content") or ""
+                    if chunk_text:
+                        if in_think_block:
+                            suffix = "\n\n"
+                            accumulated_content += suffix
+                            if on_token:
+                                on_token(suffix)
+                            in_think_block = False
+                        
+                        accumulated_content += chunk_text
+                        if on_token:
+                            on_token(chunk_text)
+
+                    if delta.get("accumulated_tool_calls"):
+                        final_tool_calls = delta["accumulated_tool_calls"]
+            except Exception as e:
+                return {"answer": None, "sources": [], "confidence": "low", "note": f"LLM stream failed: {e}"}
+
+            message = {"role": "assistant", "content": accumulated_content or None}
+            if final_tool_calls:
+                message["tool_calls"] = final_tool_calls
             messages.append(message)
 
             tool_calls = message.get("tool_calls")
