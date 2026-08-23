@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { ChatInput } from '../components/chat/ChatInput'
 import { fetchSuggestions, type Suggestion } from '../api/suggestions'
+import type { ChatOutletContext } from '../layouts/ChatLayout'
 
 const ICON_COLORS = ['text-secondary', 'text-tertiary', 'text-primary']
 
@@ -23,12 +25,8 @@ const FALLBACK_PROMPTS: Suggestion[] = [
   },
 ]
 
-type NewChatScreenProps = {
-  onSend?: (value: string) => void
-  onSelectPrompt?: (title: string) => void
-}
-
-export function NewChatScreen({ onSend, onSelectPrompt }: NewChatScreenProps) {
+export function NewChatScreen() {
+  const { onSend, onSelectPrompt } = useOutletContext<ChatOutletContext>()
   const [prompts, setPrompts] = useState<Suggestion[] | null>(null)
 
   useEffect(() => {
@@ -60,7 +58,7 @@ export function NewChatScreen({ onSend, onSelectPrompt }: NewChatScreenProps) {
         How can I help you today?
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-unit md:gap-gutter w-full max-w-4xl px-4 md:px-0 mb-24">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-unit md:gap-gutter w-full max-w-4xl px-4 md:px-0 mb-24 max-md:pb-14">
         {prompts === null
           ? Array.from({ length: 3 }).map((_, i) => (
               <div
@@ -77,7 +75,7 @@ export function NewChatScreen({ onSend, onSelectPrompt }: NewChatScreenProps) {
           : prompts.map((prompt, i) => (
               <button
                 key={prompt.title}
-                onClick={() => onSelectPrompt?.(prompt.title)}
+                onClick={() => onSelectPrompt(prompt.title)}
                 className="text-left p-container-padding bg-surface border border-outline-variant rounded-xl hover:bg-surface-container-high hover:border-outline transition-all duration-300 group flex flex-col gap-3 h-full"
               >
                 <Icon

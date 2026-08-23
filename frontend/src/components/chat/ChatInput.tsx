@@ -31,9 +31,10 @@ export function ChatInput({ placeholder = 'Message Cortex...', onSend, variant =
     variant === 'floating' ? 'absolute bottom-0 left-0 w-full p-gutter md:p-container-padding bg-background z-10' : 'w-full'
 
   return (
-    <div className={wrapperClass}>
+    <div className={wrapperClass}
+    >
       <div className="max-w-4xl mx-auto relative group">
-        <div className="relative flex items-end gap-2 bg-surface border border-outline-variant rounded-xl p-3 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all shadow-lg">
+        <div className="w-full relative flex items-end bg-surface border border-outline-variant rounded-xl p-3 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all shadow-lg">
           <textarea
             ref={textareaRef}
             onInput={handleInput}

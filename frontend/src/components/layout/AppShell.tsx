@@ -1,46 +1,54 @@
-import { useState, type ReactNode } from 'react'
-import { SideNav, type NavKey } from './SideNav'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
+import { SideNav } from './SideNav'
 import { TopAppBar } from './TopAppBar'
 import type { StoredConversation } from '../../hooks/useConversationHistory'
 
 type AppShellProps = {
-  activeNav: NavKey
-  onSelectNav?: (key: NavKey) => void
   headerRightSlot?: ReactNode
   conversations?: StoredConversation[]
   activeSessionId?: string | null
   streamingSessionIds?: Set<string>
   onOpenConversation?: (conversation: StoredConversation) => void
   onDeleteConversation?: (sessionId: string) => void
+  onNewChat?: () => void
   onLogout?: () => void
+  onSettings?: () => void
   children: ReactNode
 }
 
 export function AppShell({
-  activeNav,
-  onSelectNav,
   headerRightSlot,
   conversations,
   activeSessionId,
   streamingSessionIds,
   onOpenConversation,
   onDeleteConversation,
+  onNewChat,
   onLogout,
+  onSettings,
   children,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const location = useLocation()
+
+  // Close the mobile drawer automatically whenever the route changes.
+  // This covers NavLink and Link clicks inside SideNav.
+  useEffect(() => {
+    setDrawerOpen(false)
+  }, [location.pathname])
 
   return (
     <div className="bg-background text-on-background font-body-md text-body-md overflow-hidden flex h-dvh">
       <SideNav
-        active={activeNav}
-        onSelect={onSelectNav}
         conversations={conversations}
         activeSessionId={activeSessionId}
         streamingSessionIds={streamingSessionIds}
         onOpenConversation={onOpenConversation}
         onDeleteConversation={onDeleteConversation}
+        onNewChat={onNewChat}
         onLogout={onLogout}
+        onSettings={onSettings}
       />
 
       {drawerOpen && (
@@ -48,21 +56,15 @@ export function AppShell({
           <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
           <div className="relative w-80 max-w-[85%] h-full">
             <SideNav
-              active={activeNav}
               forceVisible
               conversations={conversations}
               activeSessionId={activeSessionId}
               streamingSessionIds={streamingSessionIds}
-              onOpenConversation={(conversation) => {
-                onOpenConversation?.(conversation)
-                setDrawerOpen(false)
-              }}
+              onOpenConversation={onOpenConversation}
               onDeleteConversation={onDeleteConversation}
+              onNewChat={onNewChat}
               onLogout={onLogout}
-              onSelect={(key) => {
-                onSelectNav?.(key)
-                setDrawerOpen(false)
-              }}
+              onSettings={onSettings}
             />
           </div>
         </div>

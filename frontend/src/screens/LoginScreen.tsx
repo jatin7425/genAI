@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { useAuth } from '../hooks/useAuth'
 
-type LoginScreenProps = {
-  onLogin: (username: string, password: string) => Promise<void>
-}
+export function LoginScreen() {
+  const { login } = useAuth()
+  const navigate = useNavigate()
 
-export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -17,7 +18,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     setSubmitting(true)
     setError(null)
     try {
-      await onLogin(username.trim(), password)
+      await login(username.trim(), password)
+      navigate('/chat', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
