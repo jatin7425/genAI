@@ -15,10 +15,12 @@ export type ChatOutletContext = {
   onSelectPrompt: (title: string) => void
   onEditLastMessage: (newText: string) => void
   onRetry: () => void
+  injectOlderTurns: (sessionId: string, olderTurns: ChatTurn[]) => void
   turns: ChatTurn[]
   thinking: string[]
   status: 'idle' | 'streaming'
   awaitingAnswer: boolean
+  isReady: boolean
 }
 
 export function ChatLayout() {
@@ -32,25 +34,44 @@ export function ChatLayout() {
   const [personaRefreshKey, setPersonaRefreshKey] = useState(0)
 
   const {
-    registry,
     activeKey,
     active,
     streamingSessionIds,
     startNewChat,
     openConversation,
     sendMessage,
+    injectOlderTurns,
     markRemoteStreaming,
     appendRemoteThinking,
     clearRemoteStreaming,
     syncRemoteTurns,
+    clearDirty,
   } = useChatRegistry()
 
-  const { conversations, upsert, remove } = useConversationHistory({
+  const {
+    conversations,
+    upsert,
+    remove,
+    loadMore,
+    hasMore,
+    isLoadingMore
+  } = useConversationHistory({
     onChatStarted: markRemoteStreaming,
     onChatThinking: appendRemoteThinking,
     onChatEnded: clearRemoteStreaming,
     onConversationUpserted: syncRemoteTurns,
   })
+
+  // On every change to the ACTIVE chat, persist it to the server.
+  // (We skip saving truly empty chats until they have at least 1 turn).
+  useEffect(() => {
+    if (activeKey && active && active.dirty) {
+      if (active.turns.length > 0) {
+        upsert(activeKey, active.persona, active.model, active.turns)
+      }
+      clearDirty(activeKey)
+    }
+  }, [activeKey, active, upsert, clearDirty])
 
   // Sync URL → registry:
   //   /chat            → clear the active key (new chat state)
@@ -67,17 +88,7 @@ export function ChatLayout() {
     }
   }, [urlSessionId, conversations]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist all conversations whenever the registry changes (unchanged turns are skipped).
-  const lastSyncedTurns = useRef<Record<string, ChatTurn[]>>({})
-  useEffect(() => {
-    for (const runtime of Object.values(registry)) {
-      if (!runtime.sessionId || runtime.turns.length === 0) continue
-      if (lastSyncedTurns.current[runtime.sessionId] === runtime.turns) continue
-      lastSyncedTurns.current[runtime.sessionId] = runtime.turns
-      upsert(runtime.sessionId, runtime.persona, runtime.model, runtime.turns)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registry])
+  // Registry-based persistence is handled by active.dirty effect above.
 
   const effectivePersona = active?.persona ?? activePersona
   const effectiveModel = active?.model ?? activeModel
@@ -128,31 +139,34 @@ export function ChatLayout() {
     onSelectPrompt: (title) => sendMessage(title, effectivePersona, effectiveModel),
     onEditLastMessage: handleEditLastMessage,
     onRetry: handleRetry,
+    injectOlderTurns: (sessionId, olderTurns) => {
+      injectOlderTurns(sessionId, olderTurns)
+    },
     turns: active?.turns ?? [],
     thinking: active?.thinking ?? [],
     status: active?.status ?? 'idle',
     awaitingAnswer: active?.awaitingAnswer ?? false,
+    isReady: !!active && activeKey === urlSessionId,
   }
 
   const { logout } = useAuth()
-
-  const onSettings = () => {
-    navigate('/settings')
-  }
 
   return (
     <div className="h-dvh w-screen relative">
       <AppShell
         conversations={conversations}
+        hasMoreConversations={hasMore}
+        isLoadingMoreConversations={isLoadingMore}
+        onLoadMoreConversations={loadMore}
         activeSessionId={activeKey}
         streamingSessionIds={streamingSessionIds}
         onOpenConversation={handleOpenConversation}
         onDeleteConversation={remove}
         onNewChat={handleNewChat}
         onLogout={logout}
-        onSettings={onSettings}
+        onSettings={() => navigate('/settings')}
         headerRightSlot={
-          <div className="flex items-center">
+          <div className="flex items-center gap-1 md:gap-3">
             <ModelSwitcher activeModel={effectiveModel} onSelectModel={setActiveModel} />
             <PersonaSwitcher
               activePersona={effectivePersona}

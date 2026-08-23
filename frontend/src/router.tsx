@@ -3,6 +3,7 @@ import { LoginScreen } from './screens/LoginScreen'
 import { NewChatScreen } from './screens/NewChatScreen'
 import { ChatConversationScreen } from './screens/ChatConversationScreen'
 import { SettingScreen } from './screens/SettingScreen'
+import { DocumentDetailScreen } from './screens/DocumentDetailScreen'
 import { ChatLayout } from './layouts/ChatLayout'
 import { useAuth } from './hooks/useAuth'
 
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
       { path: '/chat', element: <NewChatScreen /> },
       { path: '/chat/:sessionId', element: <ChatConversationScreen /> },
       { path: '/settings', element: <SettingScreen /> },
+      { path: '/documents/:docId', element: <DocumentDetailScreen /> },
     ],
   },
 ])

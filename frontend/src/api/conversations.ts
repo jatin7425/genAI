@@ -7,15 +7,26 @@ export type ServerConversation = {
   persona: string
   model: string | null
   title: string
-  turns: ChatTurn[]
+  turns?: ChatTurn[]
   updated_at: string
 }
 
-export async function fetchConversations(): Promise<ServerConversation[]> {
-  const res = await authFetch(`${API_V1}/conversations`)
+export type PaginatedResponse<T> = {
+  items: T[]
+  total: number
+  has_more: boolean
+}
+
+export async function fetchConversations(skip = 0, limit = 20): Promise<PaginatedResponse<ServerConversation>> {
+  const res = await authFetch(`${API_V1}/conversations?skip=${skip}&limit=${limit}`)
   if (!res.ok) throw new Error(`Failed to fetch conversations: ${res.status}`)
-  const data: { conversations: ServerConversation[] } = await res.json()
-  return data.conversations
+  return res.json()
+}
+
+export async function fetchConversationMessages(sessionId: string, skip = 0, limit = 20): Promise<PaginatedResponse<ChatTurn>> {
+  const res = await authFetch(`${API_V1}/conversations/${encodeURIComponent(sessionId)}/messages?skip=${skip}&limit=${limit}`)
+  if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`)
+  return res.json()
 }
 
 export async function upsertConversation(

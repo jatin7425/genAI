@@ -8,12 +8,10 @@ import fitz
 import io
 from docx import Document
 from PIL import Image
-from bson import Binary
+from bson import Binary, ObjectId
 from datetime import datetime, timezone
 import hashlib
 import logging
-
-from bson import ObjectId
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +22,7 @@ from src.utils.llm_client import llmClient
 from src.api.repositories.mongo.asset_repository import MongoAssetRepository
 from src.api.repositories.mongo.chunk_repository import MongoChunkRepository
 from src.api.repositories.mongo.document_repository import MongoDocumentRepository
+from src.api.websocket import send_ingestion_progress
 from src.utils.text_chunker import TextChunker
 from src.config import CONFIG
 
@@ -60,7 +59,7 @@ class IngestionService:
         })
         return doc_id
 
-    def ingest(self, doc_id: str, raw: bytes, filename: str) -> None:
+    async def ingest(self, doc_id: str, raw: bytes, filename: str) -> None|bool:
         """The entrypoint. Everything after upload happens here."""
         logger.info("Ingestion started for document %s (%s)", doc_id, filename)
         try:
@@ -68,7 +67,7 @@ class IngestionService:
             self.chunks.delete_by_document(doc_id)
 
             ingestion = doc_ingestion(doc=raw, filename=filename)
-            chunks = ingestion.process_embedding(doc_id, doc_title=filename)
+            chunks = await ingestion.process_embedding(doc_id, doc_title=filename)
             logger.info("Document %s produced %d chunks", doc_id, len(chunks))
 
             if chunks:
@@ -79,6 +78,16 @@ class IngestionService:
                 "chunk_count": len(chunks),
                 "indexed_at": datetime.now(timezone.utc),
             })
+            
+            await send_ingestion_progress(doc_id, {
+                "type": "progress",
+                "stage": "completed",
+                "current": len(chunks),
+                "total": len(chunks),
+                "progress": 100,
+                "message": "Ingestion completed successfully!"
+            })
+            
             logger.info("Ingestion finished for document %s", doc_id)
 
             return True
@@ -87,6 +96,15 @@ class IngestionService:
             self.documents.update(doc_id, {
                 "status": "failed",
                 "error": str(e),
+            })
+            # Send error state to the frontend over websocket
+            await send_ingestion_progress(doc_id, {
+                "type": "progress",
+                "stage": "error",
+                "current": 0,
+                "total": 0,
+                "progress": 0,
+                "message": f"Error: {str(e)}"
             })
             return False
 
@@ -101,31 +119,119 @@ class doc_ingestion:
         self.doc = doc
         self.filename = filename
         self.chunker = TextChunker()
+        self.doc_id = None
 
-    def upload_doc(self) -> list[dict[str, Any]]:
-        self._validate_size()
+    def _calculate_progress(
+        self,
+        current: int,
+        total: int,
+        start: int,
+        end: int,
+    ) -> int:
 
-        file_type = self._detect_file_type()
-        logger.debug("Detected file type %s for %s", file_type, self.filename)
+        if total <= 0:
+            return start
 
-        if file_type == "pdf":
-            return self._process_pdf()
-
-        if file_type == "docx":
-            return self._process_docx()
-
-        raise ValueError(
-            f"Unsupported document type: {file_type}"
+        progress = start + (
+            (current / total) * (end - start)
         )
 
-    def process_embedding(self, doc_id: str, doc_title: str) -> list[dict]:
-        elements = self.upload_doc()
+        return min(int(progress), end)
+
+
+    async def _send_progress(
+        self,
+        stage: str,
+        current: int,
+        total: int,
+        start: int,
+        end: int,
+        message: str,
+    ):
+
+        progress = self._calculate_progress(
+            current=current,
+            total=total,
+            start=start,
+            end=end,
+        )
+
+        await send_ingestion_progress(
+            self.doc_id,
+            {
+                "type": "progress",
+                "stage": stage,
+                "current": current,
+                "total": total,
+                "progress": progress,
+                "message": message,
+            },
+        )
+
+    async def process_embedding(self, doc_id: str, doc_title: str) -> list[dict]:
+
+        self.doc_id = doc_id
+
+        await send_ingestion_progress(
+            doc_id,
+            {
+                "type": "progress",
+                "stage": "starting",
+                "current": 0,
+                "total": 0,
+                "progress": 0,
+                "message": "Starting document ingestion",
+            },
+        )
+
+        elements = await self.upload_doc()
+
         logger.info("Extracted %d elements from %s", len(elements), self.filename)
 
-        # 1. elements -> chunks (text splits, images stay whole)
+        await send_ingestion_progress(
+            doc_id,
+            {
+                "type": "progress",
+                "stage": "extraction_completed",
+                "current": len(elements),
+                "total": len(elements),
+                "progress": 25,
+                "message": (
+                    f"Extracted {len(elements)} "
+                    f"document elements"
+                ),
+            },
+        )
+
+        if not elements:
+            await send_ingestion_progress(
+                doc_id,
+                {
+                    "type": "progress",
+                    "stage": "completed",
+                    "current": 0,
+                    "total": 0,
+                    "progress": 99,
+                    "message": (
+                        "Document contains no processable content"
+                    ),
+                },
+            )
+
+            return []
+
         chunks = []
-        for el in elements:
-            logger.info("total chunks proceessed %d ouf of %d", len(chunks), len(elements))
+
+        total_elements = len(elements)
+
+        for index, el in enumerate(elements):
+
+            logger.info(
+                "Processing element %d out of %d",
+                index + 1,
+                total_elements,
+            )
+
             if el["type"] == "text":
                 for piece in self.chunker.chunk(el["content"]):
                     chunks.append({
@@ -153,31 +259,130 @@ class doc_ingestion:
                     "asset_ref": ref,
                 })
 
+            await self._send_progress(
+                stage="chunking",
+                current=index + 1,
+                total=total_elements,
+                start=25,
+                end=55,
+                message=(
+                    f"Processing document content: "
+                    f"{index + 1} of {total_elements}"
+                ),
+            )
+
         logger.info("Built %d chunks for %s", len(chunks), self.filename)
 
-        # 2. build embed strings from neighbours
-        embed_inputs = [
-            self._build_embed_text(
-                chunks[i],
-                chunks[i - 1] if i > 0 else None,
-                chunks[i + 1] if i < len(chunks) - 1 else None,
+        # No chunks to embed
+        if not chunks:
+            await send_ingestion_progress(
+                doc_id,
+                {
+                    "type": "progress",
+                    "stage": "completed",
+                    "current": 0,
+                    "total": 0,
+                    "progress": 99,
+                    "message": (
+                        "Document processing completed"
+                    ),
+                },
+            )
+
+            return []
+
+        embed_inputs = []
+
+        total_chunks = len(chunks)
+        for index in range(total_chunks):
+            embed_text = self._build_embed_text(
+                chunks[index],
+                chunks[index - 1] if index > 0 else None,
+                chunks[index + 1] if index < total_chunks - 1 else None,
                 doc_title,
             )
-            for i in range(len(chunks))
-        ]
+            embed_inputs.append(embed_text)
+            await self._send_progress(
+                stage="preparing_embeddings",
+                current=index + 1,
+                total=total_chunks,
+                start=55,
+                end=65,
+                message=(
+                    f"Preparing embeddings: "
+                    f"{index + 1} of {total_chunks}"
+                ),
+            )
 
-        # 3. batch embed at 100
-        for start in range(0, len(embed_inputs), 100):
+        batch_size = 100
+
+        for start in range(0,len(embed_inputs),batch_size):
+            end = min(start + batch_size,len(embed_inputs),)
             logger.debug(
                 "Embedding batch %d-%d of %d for %s",
-                start, min(start + 100, len(embed_inputs)), len(embed_inputs), self.filename,
+                start,end,total_chunks,self.filename
             )
-            vectors = self.llm_client.embed(embed_inputs[start:start + 100])
-            for j, v in enumerate(vectors):
-                chunks[start + j]["embedding"] = v
+            vectors = self.llm_client.embed(embed_inputs[start:end])
+            for index, vector in enumerate(vectors):
+                chunks[start + index]["embedding"] = vector
 
-        logger.info("Embedded %d chunks for %s", len(chunks), self.filename)
+            await self._send_progress(
+                stage="embedding",
+                current=end,
+                total=total_chunks,
+                start=65,
+                end=95,
+                message=(
+                    f"Generating embeddings: "
+                    f"{end} of {total_chunks}"
+                ),
+            )
+
+        logger.info(
+            "Embedded %d chunks for %s",
+            len(chunks),self.filename
+        )
+
+        await send_ingestion_progress(
+            doc_id,
+            {
+                "type": "progress",
+                "stage": "finalizing",
+                "current": total_chunks,
+                "total": total_chunks,
+                "progress": 99,
+                "message": (
+                    "Document processing completed. "
+                    "Finalizing ingestion"
+                ),
+            },
+        )
+
         return chunks
+
+    async def upload_doc(
+        self,
+    ) -> list[dict[str, Any]]:
+
+        self._validate_size()
+
+        file_type = self._detect_file_type()
+
+        logger.debug(
+            "Detected file type %s for %s",
+            file_type, self.filename
+        )
+
+        if file_type == "pdf":
+            return await self._process_pdf()
+
+        if file_type == "docx":
+            return await self._process_docx()
+
+        raise ValueError(
+            f"Unsupported document type: "
+            f"{file_type}"
+        )
 
     def _validate_size(self):
         max_bytes = MAX_FILE_MB * 1024 * 1024
@@ -214,7 +419,7 @@ class doc_ingestion:
 
         return "unknown"
 
-    def _process_pdf(self) -> list[dict[str, Any]]:
+    async def _process_pdf(self) -> list[dict[str, Any]]:
 
         pdf = fitz.open(
             stream=self.doc,
@@ -222,17 +427,21 @@ class doc_ingestion:
         )
 
         try:
-            if len(pdf) > MAX_PAGES:
+            total_pages = len(pdf)
+            if total_pages > MAX_PAGES:
                 logger.warning(
                     "Rejected %s: %d pages exceeds %d page limit",
-                    self.filename, len(pdf), MAX_PAGES,
+                    self.filename, total_pages, MAX_PAGES,
                 )
                 raise ValueError(
-                    f"Document contains {len(pdf)} pages. "
+                    f"Document contains {total_pages} pages. "
                     f"Maximum allowed is {MAX_PAGES}."
                 )
 
-            logger.debug("Processing %d pages for %s", len(pdf), self.filename)
+            logger.debug(
+                "Processing %d pages for %s",
+                total_pages, self.filename,
+            )
             blocks = []
             self.image_count = 0
             global_order = 0
@@ -274,13 +483,25 @@ class doc_ingestion:
                     block["order"] = global_order
                     blocks.append(block)
 
+                await self._send_progress(
+                    stage="extracting",
+                    current=page_number,
+                    total=total_pages,
+                    start=0,
+                    end=25,
+                    message=(
+                        f"Extracting page "
+                        f"{page_number} of {total_pages}"
+                    ),
+                )
+
             logger.info("Extracted %d blocks from %s", len(blocks), self.filename)
             return blocks
 
         finally:
             pdf.close()
 
-    def _process_docx(self) -> list[dict[str, Any]]:
+    async def _process_docx(self) -> list[dict[str, Any]]:
         """docx has no native pagination without rendering, so every
         element is reported on page 1 with an empty bbox."""
         document = Document(BytesIO(self.doc))
@@ -289,7 +510,25 @@ class doc_ingestion:
         self.image_count = 0
         order = 0
 
-        for paragraph in document.paragraphs:
+        paragraphs = [
+            paragraph
+            for paragraph in document.paragraphs
+            if paragraph.text.strip()
+        ]
+
+        image_relationships = [
+            rel
+            for rel in document.part.rels.values()
+            if "image" in rel.reltype
+        ]
+
+        total_items = (
+            len(paragraphs)
+            + len(image_relationships)
+        )
+        current_item = 0
+
+        for paragraph in paragraphs:
             text = paragraph.text.strip()
             if not text:
                 continue
@@ -303,9 +542,20 @@ class doc_ingestion:
                 "order": order,
             })
 
-        for rel in document.part.rels.values():
-            if "image" not in rel.reltype:
-                continue
+            current_item += 1
+            await self._send_progress(
+                stage="extracting",
+                current=current_item,
+                total=total_items,
+                start=0,
+                end=25,
+                message=(
+                    f"Processing document content: "
+                    f"{current_item} of {total_items}"
+                ),
+            )
+
+        for rel in image_relationships:
 
             self.image_count += 1
             if self.image_count > MAX_IMAGES:
@@ -337,6 +587,18 @@ class doc_ingestion:
                 "order": order,
             })
 
+            current_item += 1
+            await self._send_progress(
+                stage="extracting",
+                current=current_item,
+                total=total_items,
+                start=0,
+                end=25,
+                message=(
+                    f"Processing document content: "
+                    f"{current_item} of {total_items}"
+                ),
+            )
         logger.info("Extracted %d blocks from %s", len(blocks), self.filename)
         return blocks
 
@@ -367,7 +629,12 @@ class doc_ingestion:
             1: self._process_image_component,
         }
 
-        handler = handlers.get(block.get("type"))
+        type_ = block.get("type")
+
+        if type_ is None:
+            return None
+
+        handler = handlers.get(type_)
 
         if handler is None:
             return None
@@ -439,15 +706,48 @@ class doc_ingestion:
         }
 
     def _build_embed_text(self, chunk, prev, nxt, doc_title) -> str:
-        parts = [doc_title]
+        parts = [str(doc_title)]
+
         if prev:
-            parts.append(f"Before: {prev['text'][:150]}")
+            prev_text = prev.get("text", "")
+
+            if not isinstance(prev_text, str):
+                logger.warning(
+                    "Previous chunk text is %s, expected string",
+                    type(prev_text).__name__
+                )
+                prev_text = str(prev_text)
+
+            parts.append(f"Before: {prev_text[:150]}")
+
+        chunk_text = chunk.get("text", "")
+
+        if not isinstance(chunk_text, str):
+            logger.warning(
+                "Current chunk text is %s, expected string",
+                type(chunk_text).__name__
+            )
+            chunk_text = str(chunk_text)
+
         if chunk["modality"] == "image":
-            parts.append(f"Figure (page {chunk['page']}): {chunk['text']}")
+            parts.append(
+                f"Figure (page {chunk['page']}): {chunk_text}"
+            )
         else:
-            parts.append(chunk["text"])
+            parts.append(chunk_text)
+
         if nxt:
-            parts.append(f"After: {nxt['text'][:150]}")
+            next_text = nxt.get("text", "")
+
+            if not isinstance(next_text, str):
+                logger.warning(
+                    "Next chunk text is %s, expected string",
+                    type(next_text).__name__
+                )
+                next_text = str(next_text)
+
+            parts.append(f"After: {next_text[:150]}")
+
         return "\n".join(parts)
 
     def _normalize_image(self, raw: bytes, max_dim: int = 1600) -> tuple[bytes, str, int, int]:

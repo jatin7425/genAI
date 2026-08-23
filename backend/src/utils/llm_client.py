@@ -157,7 +157,7 @@ class llmClient:
         image: bytes,
         mime_type: str = "image/png",
         model: str = "gemini",
-    ) -> dict[str, Any] | None:
+    ) -> str:
 
         if not self._valid_model(model):
             raise ValueError(
@@ -212,7 +212,10 @@ class llmClient:
             ],
         }
 
-        return self.call_api("chat", payload)
+        response = self.call_api("chat", payload)
+        if response and "choices" in response and len(response["choices"]) > 0:
+            return response["choices"][0].get("message", {}).get("content", "")
+        return ""
 
     def embed(self, texts: list[str], model: str = "embed-cloudflare") -> list[list[float]]:
         if not self._valid_model(model):

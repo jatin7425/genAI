@@ -18,7 +18,7 @@ function fromServer(c: ServerConversation): StoredConversation {
     persona: c.persona,
     model: c.model ?? null,
     title: c.title,
-    turns: c.turns,
+    turns: c.turns || [],
     updatedAt: new Date(c.updated_at).getTime(),
   }
 }
@@ -34,16 +34,43 @@ export type RemoteChatHandlers = {
 
 export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = {}) {
   const [conversations, setConversations] = useState<StoredConversation[]>([])
+  const [hasMore, setHasMore] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  
   const remoteChatHandlersRef = useRef(remoteChatHandlers)
   remoteChatHandlersRef.current = remoteChatHandlers
 
   useEffect(() => {
-    fetchConversations()
-      .then((remote) => setConversations(remote.map(fromServer)))
-      .catch(() => {
-        // best-effort — the app still works with an empty/local list if this fails
-      })
+    const doFetch = () => {
+      fetchConversations(0, 20)
+        .then((remote) => {
+          setConversations(remote.items.map(fromServer))
+          setHasMore(remote.has_more)
+        })
+        .catch(() => {
+          // best-effort
+        })
+    }
+
+    doFetch()
+
+    window.addEventListener('api_mutation', doFetch)
+    return () => window.removeEventListener('api_mutation', doFetch)
   }, [])
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isLoadingMore) return
+    setIsLoadingMore(true)
+    try {
+      const res = await fetchConversations(conversations.length, 20)
+      setConversations(prev => [...prev, ...res.items.map(fromServer)])
+      setHasMore(res.has_more)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }, [hasMore, isLoadingMore, conversations.length])
 
   // Live updates: any browser logged into this account gets pushed changes made by
   // any other one (or by this one), instead of only seeing its own local writes.
@@ -114,7 +141,7 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
 
   const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
 
-  return { conversations: sorted, upsert, remove }
+  return { conversations: sorted, upsert, remove, loadMore, hasMore, isLoadingMore }
 }
 
 function deriveTitle(turns: ChatTurn[]): string {

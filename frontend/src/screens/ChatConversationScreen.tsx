@@ -1,28 +1,79 @@
-import { useEffect, useRef, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
+import { useOutletContext, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { ChatBubble } from '../components/chat/ChatBubble'
 import { LiveThinkingTrace } from '../components/chat/LiveThinkingTrace'
 import { ChatInput } from '../components/chat/ChatInput'
 import { Markdown } from '../components/chat/Markdown'
 import type { ChatOutletContext } from '../layouts/ChatLayout'
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
+import { fetchConversationMessages } from '../api/conversations'
 
 export function ChatConversationScreen() {
-  const { turns, thinking, status, awaitingAnswer, onSend, onEditLastMessage, onRetry } =
+  const { sessionId } = useParams<{ sessionId?: string }>()
+  const { turns, thinking, status, awaitingAnswer, onSend, onEditLastMessage, onRetry, injectOlderTurns, isReady } =
     useOutletContext<ChatOutletContext>()
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [editingLast, setEditingLast] = useState(false)
   const [editValue, setEditValue] = useState('')
+  
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
+  // Reset pagination state when switching conversations
   useEffect(() => {
+    setHasMore(true)
+    setLoadingMore(false)
+  }, [sessionId])
+
+  // Track if we just injected older messages to restore scroll position
+  const previousScrollHeight = useRef<number>(0)
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!sessionId || !hasMore || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const res = await fetchConversationMessages(sessionId, turns.length, 20)
+      
+      const el = scrollRef.current
+      if (el) {
+        previousScrollHeight.current = el.scrollHeight
+      }
+      
+      injectOlderTurns(sessionId, res.items)
+      setHasMore(res.has_more)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [sessionId, turns.length, hasMore, loadingMore, injectOlderTurns])
+
+  const observerTarget = useInfiniteScroll(loadOlderMessages, hasMore, loadingMore)
+
+  // Initial load — wait until registry entry exists (isReady) before fetching
+  useEffect(() => {
+    if (isReady && sessionId && turns.length === 0 && hasMore && !loadingMore) {
+      loadOlderMessages()
+    }
+  }, [isReady, sessionId, turns.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll restoration or auto-scroll to bottom
+  useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // wait a frame so new/changed content has been laid out before we read scrollHeight
-    const raf = requestAnimationFrame(() => {
+
+    if (previousScrollHeight.current > 0) {
+      // We just prepended messages. Adjust scroll position to maintain relative view
+      const newHeight = el.scrollHeight
+      const heightDifference = newHeight - previousScrollHeight.current
+      el.scrollTop += heightDifference
+      previousScrollHeight.current = 0
+    } else {
+      // Auto-scroll to bottom for new messages or thinking
       el.scrollTop = el.scrollHeight
-    })
-    return () => cancelAnimationFrame(raf)
+    }
   }, [turns, thinking, status])
 
   useEffect(() => {
@@ -40,6 +91,11 @@ export function ChatConversationScreen() {
     <div className="flex-1 flex flex-col relative overflow-hidden bg-background">
       <div ref={scrollRef} className="chat-scroll overflow-y-auto p-container-padding pb-stack-lg h-full">
         <div className="max-w-4xl mx-auto w-full flex-1 space-y-stack-md ">
+          {hasMore && (
+            <div ref={observerTarget} className="py-2 text-center text-secondary text-sm">
+              {loadingMore ? 'Loading older messages...' : ''}
+            </div>
+          )}
           {turns.map((turn, i) => {
             if (turn.kind === 'user') {
               const isLastUser = i === lastUserIndex

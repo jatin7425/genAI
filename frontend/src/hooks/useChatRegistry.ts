@@ -19,6 +19,7 @@ export type ConversationRuntime = {
   thinking: string[]
   status: 'idle' | 'streaming'
   awaitingAnswer: boolean
+  dirty: boolean
 }
 
 const EMPTY_RUNTIME = (persona: string, model: string | null = null): ConversationRuntime => ({
@@ -29,6 +30,7 @@ const EMPTY_RUNTIME = (persona: string, model: string | null = null): Conversati
   thinking: [],
   status: 'idle',
   awaitingAnswer: false,
+  dirty: false,
 })
 
 /** Drops the last user turn and everything after it — used by both "edit my last
@@ -65,7 +67,7 @@ export function useChatRegistry() {
   const openConversation = useCallback((sessionId: string, persona: string, model: string | null, turns: ChatTurn[]) => {
     setRegistry((prev) => {
       if (prev[sessionId]?.status === 'streaming') return prev // don't clobber an in-flight stream
-      return { ...prev, [sessionId]: { sessionId, persona, model, turns, thinking: [], status: 'idle', awaitingAnswer: false } }
+      return { ...prev, [sessionId]: { sessionId, persona, model, turns, thinking: [], status: 'idle', awaitingAnswer: false, dirty: false } }
     })
     setActiveKey(sessionId)
   }, [])
@@ -90,6 +92,7 @@ export function useChatRegistry() {
             turns: [...baseTurns, { kind: 'user', id: nextId(), text: trimmed }],
             thinking: [],
             status: 'streaming',
+            dirty: true,
           },
         }
       })
@@ -122,7 +125,7 @@ export function useChatRegistry() {
               if (!entry) return prev
               const rest = { ...prev }
               delete rest[oldKey]
-              return { ...rest, [newSessionId]: { ...entry, sessionId: newSessionId } }
+              return { ...rest, [newSessionId]: { ...entry, sessionId: newSessionId, dirty: true } }
             })
             setActiveKey((prevActive) => (prevActive === oldKey ? newSessionId : prevActive))
             locallyDrivenRef.current.delete(oldKey)
@@ -138,6 +141,7 @@ export function useChatRegistry() {
               turns: [...r.turns, { kind: 'question', id: nextId(), text: question }],
               awaitingAnswer: true,
               status: 'idle',
+              dirty: true,
             }))
             finishLocalDrive()
           },
@@ -155,6 +159,7 @@ export function useChatRegistry() {
               ],
               awaitingAnswer: false,
               status: 'idle',
+              dirty: true,
             }))
             finishLocalDrive()
           },
@@ -163,6 +168,7 @@ export function useChatRegistry() {
               ...r,
               turns: [...r.turns, { kind: 'agent', id: nextId(), text: `Request failed: ${error.message}`, status: 'error' }],
               status: 'idle',
+              dirty: true,
             }))
             finishLocalDrive()
           },
@@ -172,6 +178,24 @@ export function useChatRegistry() {
     },
     [activeKey, registry],
   )
+
+  const injectOlderTurns = useCallback((sessionId: string, olderTurns: ChatTurn[]) => {
+    setRegistry((prev) => {
+      const entry = prev[sessionId]
+      if (!entry) return prev
+      
+      // To avoid duplicates, filter out turns we already have
+      const existingIds = new Set(entry.turns.map(t => t.id))
+      const newTurns = olderTurns.filter(t => !existingIds.has(t.id))
+      
+      if (newTurns.length === 0) return prev
+      
+      return {
+        ...prev,
+        [sessionId]: { ...entry, turns: [...newTurns, ...entry.turns] }
+      }
+    })
+  }, [])
 
   const markRemoteStreaming = useCallback((sessionId: string) => {
     if (locallyDrivenRef.current.has(sessionId)) return
@@ -228,6 +252,14 @@ export function useChatRegistry() {
     })
   }, [])
 
+  const clearDirty = useCallback((sessionId: string) => {
+    setRegistry((prev) => {
+      const entry = prev[sessionId]
+      if (!entry || !entry.dirty) return prev
+      return { ...prev, [sessionId]: { ...entry, dirty: false } }
+    })
+  }, [])
+
   const active = activeKey ? registry[activeKey] : null
   const streamingSessionIds = new Set(
     Object.values(registry)
@@ -243,9 +275,11 @@ export function useChatRegistry() {
     startNewChat,
     openConversation,
     sendMessage,
+    injectOlderTurns,
     markRemoteStreaming,
     appendRemoteThinking,
     clearRemoteStreaming,
     syncRemoteTurns,
+    clearDirty,
   }
 }

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import CONFIG
 from src.api import api_router
+from src.api.websocket.ingestion import router as websocket_router
 
 # The API runs headless — ask_user() must go through the interaction bridge, not input().
 CONFIG.setdefault("flags", {})["is_terminal"] = False
@@ -27,9 +28,10 @@ app.add_middleware(
 )
 
 
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok"}
 
 
 app.include_router(api_router)
+app.include_router(websocket_router)

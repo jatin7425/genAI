@@ -7,6 +7,9 @@ import type { StoredConversation } from '../../hooks/useConversationHistory'
 type AppShellProps = {
   headerRightSlot?: ReactNode
   conversations?: StoredConversation[]
+  hasMoreConversations?: boolean
+  isLoadingMoreConversations?: boolean
+  onLoadMoreConversations?: () => void
   activeSessionId?: string | null
   streamingSessionIds?: Set<string>
   onOpenConversation?: (conversation: StoredConversation) => void
@@ -20,6 +23,9 @@ type AppShellProps = {
 export function AppShell({
   headerRightSlot,
   conversations,
+  hasMoreConversations,
+  isLoadingMoreConversations,
+  onLoadMoreConversations,
   activeSessionId,
   streamingSessionIds,
   onOpenConversation,
@@ -42,6 +48,9 @@ export function AppShell({
     <div className="bg-background text-on-background font-body-md text-body-md overflow-hidden flex h-dvh">
       <SideNav
         conversations={conversations}
+        hasMoreConversations={hasMoreConversations}
+        isLoadingMoreConversations={isLoadingMoreConversations}
+        onLoadMoreConversations={onLoadMoreConversations}
         activeSessionId={activeSessionId}
         streamingSessionIds={streamingSessionIds}
         onOpenConversation={onOpenConversation}
@@ -58,6 +67,9 @@ export function AppShell({
             <SideNav
               forceVisible
               conversations={conversations}
+              hasMoreConversations={hasMoreConversations}
+              isLoadingMoreConversations={isLoadingMoreConversations}
+              onLoadMoreConversations={onLoadMoreConversations}
               activeSessionId={activeSessionId}
               streamingSessionIds={streamingSessionIds}
               onOpenConversation={onOpenConversation}

@@ -7,9 +7,13 @@ from src.api.schema.conversation import ConversationListResponse, ConversationUp
 router = APIRouter()
 
 
-@router.get("/conversations", response_model=ConversationListResponse)
-def list_conversations():
-    return {"conversations": conversation_service.list_conversations()}
+@router.get("/conversations")
+def list_conversations(skip: int = 0, limit: int = 20):
+    return conversation_service.list_conversations(skip=skip, limit=limit)
+
+@router.get("/conversations/{session_id}/messages")
+def get_conversation_messages(session_id: str, skip: int = 0, limit: int = 20):
+    return conversation_service.get_messages(session_id, skip=skip, limit=limit)
 
 
 @router.get("/conversations/stream")

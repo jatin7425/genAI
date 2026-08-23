@@ -17,8 +17,12 @@ class ConversationService:
         self.repository = repository
         self.broadcaster = broadcaster
 
-    def list_conversations(self):
-        return sorted(self.repository.list(), key=lambda c: c["updated_at"], reverse=True)
+    def list_conversations(self, skip: int = 0, limit: int = 20):
+        # The repository now sorts it and paginates it
+        return self.repository.list(skip=skip, limit=limit)
+
+    def get_messages(self, session_id: str, skip: int = 0, limit: int = 20):
+        return self.repository.get_turns(session_id, skip=skip, limit=limit)
 
     def upsert_conversation(self, session_id, persona, turns, model=None):
         if not turns:
