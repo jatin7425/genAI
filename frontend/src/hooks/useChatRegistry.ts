@@ -203,10 +203,19 @@ export function useChatRegistry() {
             finishLocalDrive()
           },
           onDone: (payload) => {
-            const finalText = stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.')
+            const isError = payload.status === 'error'
             const targetId = streamingTurnId
             patch((r) => {
               if (targetId) {
+                const streamed = r.turns.find((t) => t.kind === 'agent' && t.id === targetId)
+                const streamedText = streamed && streamed.kind === 'agent' ? streamed.text : ''
+                // On failure, keep whatever already streamed instead of overwriting it with
+                // the raw backend error (payload.note) — the turn's error status already
+                // surfaces a Retry affordance. Only fall back to a generic message if
+                // nothing streamed at all.
+                const finalText = isError
+                  ? streamedText.trim() || "Something went wrong generating a response."
+                  : stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.')
                 // Replace the streaming turn in-place with the finalized version
                 return {
                   ...r,
@@ -220,7 +229,11 @@ export function useChatRegistry() {
                   dirty: true,
                 }
               }
-              // Fallback: no streaming turns received (e.g. tool-only response)
+              // Fallback: no streaming turns received (e.g. tool-only response, or an
+              // error before any tokens arrived)
+              const finalText = isError
+                ? "Something went wrong generating a response."
+                : stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.')
               return {
                 ...r,
                 turns: [
