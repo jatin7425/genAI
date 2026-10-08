@@ -1,25 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
 import { fetchPersonas } from '../../api/personas'
-
-function initialsFor(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('')
-}
-
-function PersonaAvatar({ name, size = 'w-8 h-8' }: { name: string; size?: string }) {
-  return (
-    <div
-      className={`${size} rounded-full bg-primary-container flex items-center justify-center text-on-primary-container text-xs font-bold shrink-0`}
-    >
-      {initialsFor(name) || '?'}
-    </div>
-  )
-}
+import { PersonaAvatar } from './PersonaAvatar'
 
 type PersonaSwitcherProps = {
   activePersona: string
@@ -32,12 +14,18 @@ export function PersonaSwitcher({ activePersona, onSelectPersona, onCreateNew, r
   const [open, setOpen] = useState(false)
   const [personas, setPersonas] = useState<string[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true)
+    setLoadError(null)
     fetchPersonas()
       .then(setPersonas)
-      .catch((err) => setLoadError(err.message))
-  }, [refreshKey])
+      .catch(() => setLoadError("Couldn't load personas. Check your connection."))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative mr-stack-md">
@@ -53,12 +41,21 @@ export function PersonaSwitcher({ activePersona, onSelectPersona, onCreateNew, r
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-unit w-64 bg-[#222222] border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md overflow-hidden flex flex-col py-2 z-10">
+        <div className="absolute top-full right-0 mt-unit w-64 bg-surface-container-high border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md overflow-hidden flex flex-col py-2 z-10">
           <div className="px-4 py-2 border-b border-outline-variant mb-2">
             <span className="font-label-caps text-label-caps text-on-surface-variant">ACTIVE PERSONAS</span>
           </div>
 
-          {loadError && <div className="px-4 py-2 text-error text-xs">{loadError}</div>}
+          {loading && <div className="px-4 py-2 text-on-surface-variant text-xs">Loading personas...</div>}
+
+          {loadError && (
+            <div className="px-4 py-2 flex flex-col items-start gap-1.5">
+              <p className="text-on-surface-variant text-xs">{loadError}</p>
+              <button onClick={load} className="text-primary text-xs font-medium hover:underline">
+                Try again
+              </button>
+            </div>
+          )}
 
           {personas.map((name) => {
             const isActive = name === activePersona

@@ -5,6 +5,8 @@ import type { StoredConversation } from '../../hooks/useConversationHistory'
 import { fetchDocuments, deleteDocument, type APIDocument } from '../../api/documents'
 import { UploadDocumentModal } from '../document/UploadDocumentModal'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { showToast } from '../../utils/toastState'
 
 type SideNavProps = {
   forceVisible?: boolean
@@ -42,6 +44,12 @@ export function SideNav({
   const [docsHasMore, setDocsHasMore] = useState(true)
   const [docsLoading, setDocsLoading] = useState(false)
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<
+    | { type: 'conversation'; id: string; label: string }
+    | { type: 'document'; id: string; label: string }
+    | null
+  >(null)
+  const [deleting, setDeleting] = useState(false)
 
   const displayConversations = useMemo(() => {
     return [...conversations].sort((a, b) => {
@@ -87,10 +95,44 @@ export function SideNav({
     if (onLoadMoreConversations) onLoadMoreConversations()
   }, hasMoreConversations, isLoadingMoreConversations)
 
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return
+    if (pendingDelete.type === 'conversation') {
+      onDeleteConversation?.(pendingDelete.id)
+      setPendingDelete(null)
+      return
+    }
+
+    setDeleting(true)
+    try {
+      await deleteDocument(pendingDelete.id)
+      if (location.pathname === `/documents/${pendingDelete.id}`) {
+        navigate('/')
+      }
+      window.dispatchEvent(new CustomEvent('api_mutation'))
+      showToast('Document deleted.', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete document.', 'error')
+    } finally {
+      setDeleting(false)
+      setPendingDelete(null)
+    }
+  }
+
   return (
     <>
       {uploadModalOpen && (
         <UploadDocumentModal onClose={() => setUploadModalOpen(false)} />
+      )}
+      {pendingDelete && (
+        <ConfirmDialog
+          title={pendingDelete.type === 'conversation' ? 'Delete conversation?' : 'Delete document?'}
+          description={`"${pendingDelete.label}" will be permanently deleted. This can't be undone.`}
+          confirmLabel={deleting ? 'Deleting...' : 'Delete'}
+          busy={deleting}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={handleConfirmDelete}
+        />
       )}
       <aside
         className={`
@@ -108,21 +150,13 @@ export function SideNav({
         <div className="mb-5 flex items-center gap-3 px-2 pt-2">
           <div className="relative">
             <div className="absolute inset-0 rounded-2xl bg-primary/20 blur-lg" />
-            <div className="relative h-11 w-11 overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-high shadow-md">
-              <img
-                alt="User profile avatar"
-                className="h-full w-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBua_tAGdJ3Ee5aYlFxMgIvJK6gc_Cn8zGawjfKfPedOE1xGh4O0HpnaH9cRf7U7NWscpgn4CpTOc_LzVg0t2TvB_F7AIaOn27AsMSOV4dEknzjLH4Fh3wwgLvH-wGmDiDel7HADNhGIrqTRJtLY9OaCRw13efDL1YD8BptMyU0459Wk97O21w3m9BsuOI8VZsaSiLuNHeaYrwD0JQHYSrWGbrNqbOqpmcH2a8kvv4feBQOO6hmbgFQ"
-              />
+            <div className="relative h-11 w-11 overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-high shadow-md flex items-center justify-center">
+              <Icon name="graphic_eq" filled className="text-primary text-[22px]" />
             </div>
           </div>
           <div className="min-w-0">
-            <h1 className="truncate font-headline-md text-lg font-semibold tracking-tight text-on-surface">
-              Cortex Labs
-            </h1>
-            <p className="mt-0.5 truncate text-xs text-on-surface-variant">
-              AI Research Environment
-            </p>
+            <h1 className="truncate font-headline-md text-lg font-semibold tracking-tight text-on-surface">Cortex</h1>
+            <p className="mt-0.5 truncate text-xs text-on-surface-variant">AI Assistant</p>
           </div>
         </div>
 
@@ -213,7 +247,7 @@ export function SideNav({
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            onDeleteConversation?.(conversation.sessionId)
+                            setPendingDelete({ type: 'conversation', id: conversation.sessionId, label: conversation.title })
                           }}
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:opacity-0 transition-all md:hover:bg-error/10 md:hover:text-error md:group-hover/item:opacity-100"
                         >
@@ -262,6 +296,7 @@ export function SideNav({
                       <Link
                         key={doc._id}
                         to={`/documents/${doc._id}`}
+                        state={{ filename, status: doc.status, chunkCount: doc.chunk_count }}
                         className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface"
                       >
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isFailed ? 'bg-error/10 text-error' : 'bg-surface-container-highest'}`}>
@@ -281,18 +316,10 @@ export function SideNav({
                           )}
                         </div>
                         <button
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            try {
-                              await deleteDocument(doc._id)
-                              if (location.pathname === `/documents/${doc._id}`) {
-                                navigate('/')
-                              }
-                              window.dispatchEvent(new CustomEvent('api_mutation'))
-                            } catch (err) {
-                              console.error('Failed to delete doc:', err)
-                            }
+                            setPendingDelete({ type: 'document', id: doc._id, label: filename })
                           }}
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:opacity-0 transition-all md:hover:bg-error/10 md:hover:text-error md:group-hover:opacity-100"
                         >

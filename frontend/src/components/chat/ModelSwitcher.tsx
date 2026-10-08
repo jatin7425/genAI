@@ -11,16 +11,21 @@ export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps
   const [open, setOpen] = useState(false)
   const [models, setModels] = useState<string[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true)
+    setLoadError(null)
     fetchModels()
       .then((fetched) => {
         setModels(fetched)
         if (!activeModel && fetched.length > 0) onSelectModel(fetched[0])
       })
-      .catch((err) => setLoadError(err.message))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+      .catch(() => setLoadError("Couldn't load models. Check your connection."))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative mr-unit">
@@ -36,12 +41,21 @@ export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-unit w-56 bg-[#222222] border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md overflow-hidden flex flex-col py-2 z-10">
+        <div className="absolute top-full right-0 mt-unit w-56 bg-surface-container-high border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md overflow-hidden flex flex-col py-2 z-10">
           <div className="px-4 py-2 border-b border-outline-variant mb-2">
             <span className="font-label-caps text-label-caps text-on-surface-variant">MODE / MODEL</span>
           </div>
 
-          {loadError && <div className="px-4 py-2 text-error text-xs">{loadError}</div>}
+          {loading && <div className="px-4 py-2 text-on-surface-variant text-xs">Loading models...</div>}
+
+          {loadError && (
+            <div className="px-4 py-2 flex flex-col items-start gap-1.5">
+              <p className="text-on-surface-variant text-xs">{loadError}</p>
+              <button onClick={load} className="text-primary text-xs font-medium hover:underline">
+                Try again
+              </button>
+            </div>
+          )}
 
           {models.map((model) => {
             const isActive = model === activeModel
