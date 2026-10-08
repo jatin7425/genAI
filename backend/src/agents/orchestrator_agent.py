@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.utils import llm_client
 from src.utils.common_tools import CommonTools
+from src.utils.time_context import with_current_context
 from src.agents.agent_factory import agentFactory
 
 
@@ -87,7 +88,7 @@ class orchestrator:
             try:
                 for delta in self.llm_client.call_api_stream("chat", {
                     "model": model,
-                    "messages": messages,
+                    "messages": with_current_context(messages),
                     "tools": tools,
                 }):
                     reasoning_text = delta.get("reasoning_content") or ""
