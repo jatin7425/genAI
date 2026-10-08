@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchConversations, upsertConversation, deleteConversation, type ServerConversation } from '../api/conversations'
 import { streamConversationEvents } from '../api/conversationEvents'
+import { showToast } from '../utils/toastState'
 import type { ChatTurn } from './useChatRegistry'
 
 export type StoredConversation = {
@@ -135,8 +136,21 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
   }, [])
 
   const remove = useCallback((sessionId: string) => {
-    setConversations((prev) => prev.filter((c) => c.sessionId !== sessionId))
-    void deleteConversation(sessionId).catch(() => {})
+    let removed: StoredConversation | undefined
+    setConversations((prev) => {
+      removed = prev.find((c) => c.sessionId === sessionId)
+      return prev.filter((c) => c.sessionId !== sessionId)
+    })
+
+    deleteConversation(sessionId)
+      .then(() => showToast('Conversation deleted.', 'success'))
+      .catch(() => {
+        showToast('Failed to delete conversation. It has been restored.', 'error')
+        const restored = removed
+        if (restored) {
+          setConversations((prev) => (prev.some((c) => c.sessionId === restored.sessionId) ? prev : [restored, ...prev]))
+        }
+      })
   }, [])
 
   const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)

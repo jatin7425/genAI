@@ -36,7 +36,7 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
   }
 
   return (
-    <div className="bg-[#222222] border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md w-full max-w-4xl flex flex-col md:flex-row overflow-hidden">
+    <div className="bg-surface-container-high border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md w-full max-w-4xl flex flex-col md:flex-row overflow-hidden">
       <div className="flex-1 p-stack-md border-r border-outline-variant flex flex-col gap-stack-sm overflow-y-auto">
         <div className="flex items-center justify-between mb-unit">
           <h2 className="font-headline-md text-headline-md text-on-surface">Create Persona</h2>

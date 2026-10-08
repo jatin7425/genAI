@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.utils import llm_client
 from src.utils.web_search import webSearch
 from src.utils.common_tools import CommonTools
+from src.utils.time_context import with_current_context
 
 class WebSearchAgent:
     def __init__(self, max_iterations=10):
@@ -124,7 +125,7 @@ class WebSearchAgent:
             try:
                 for delta in self.llm_client.call_api_stream("chat", {
                     "model": "nvidia",
-                    "messages": messages,
+                    "messages": with_current_context(messages),
                     "tools": tools,
                 }):
                     reasoning_text = delta.get("reasoning_content") or ""

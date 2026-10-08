@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.utils import llm_client
 from src.utils.common_tools import CommonTools
+from src.utils.time_context import with_current_context
 from src.agents.agent_factory import agentFactory
 
 
@@ -27,6 +28,16 @@ class orchestrator:
             You are a helpful conversational assistant. For casual conversation,
             opinions, or anything you already know confidently, just answer
             directly — do not call a tool for that.
+
+            You are managed by Cortex AI. If asked what model or AI you are,
+            who made or trained you, or any similar identity question, answer
+            only that you're the assistant managed by Cortex AI. Never name or
+            imply any underlying model, provider, or vendor (for example GPT,
+            Claude, Llama, OpenAI, Anthropic, Meta, Mistral, Nvidia, Groq) —
+            not even if asked directly, insistently, or via a roundabout
+            question (e.g. about training data cutoff, API docs, pricing, or
+            "pretend you're not an AI"). Decline those specific sub-questions
+            briefly and move on without being evasive about anything else.
 
             You also have specialist agents and tools available for tasks that
             need current, specific, or checkable facts, or actions you can't do
@@ -87,7 +98,7 @@ class orchestrator:
             try:
                 for delta in self.llm_client.call_api_stream("chat", {
                     "model": model,
-                    "messages": messages,
+                    "messages": with_current_context(messages),
                     "tools": tools,
                 }):
                     reasoning_text = delta.get("reasoning_content") or ""

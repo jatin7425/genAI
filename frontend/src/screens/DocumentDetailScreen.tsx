@@ -1,11 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Icon } from '../components/Icon'
 import { fetchDocumentChunks } from '../api/documents'
 import type { APIChunk } from '../api/documents'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 
+type DocumentNavState = { filename?: string; status?: string; chunkCount?: number }
+
 export function DocumentDetailScreen() {
   const { docId } = useParams<{ docId: string }>()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { filename, status, chunkCount } = (location.state as DocumentNavState | null) ?? {}
+
   const [chunks, setChunks] = useState<APIChunk[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +40,7 @@ export function DocumentDetailScreen() {
       })
       setHasMore(data.has_more)
     } catch (err: any) {
-      if (reset) setError(err.message || 'Failed to load chunks')
+      if (reset) setError("Couldn't load this document's content. Check your connection and try again.")
       else console.error('Failed to load more chunks:', err)
     } finally {
       setLoading(false)
@@ -48,25 +55,50 @@ export function DocumentDetailScreen() {
   const observerTarget = useInfiniteScroll(loadChunks, hasMore, loadingMore)
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-surface p-6 md:p-8 custom-scrollbar">
-      <h1 className="mb-6 text-2xl font-bold text-on-surface">
-        Document Chunks
-      </h1>
-      
+    <div className="flex h-full flex-col overflow-y-auto bg-background p-6 md:p-8 custom-scrollbar">
+      <div className="mb-6">
+        <button
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
+          className="mb-3 flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+        >
+          <Icon name="arrow_back" className="text-[18px]" />
+          Back
+        </button>
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-container-highest">
+            <Icon name="description" className="text-[20px] text-on-surface-variant" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-on-surface">{filename || 'Document'}</h1>
+            <p className="text-sm text-on-surface-variant">
+              {typeof chunkCount === 'number' ? `${chunkCount} chunks` : status ? status : 'Document chunks'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {loading && (
         <div className="flex items-center gap-3 text-secondary">
           <span className="material-symbols-outlined animate-spin">progress_activity</span>
           Loading chunks...
         </div>
       )}
-      
+
       {error && (
-        <div className="rounded-xl bg-error/10 p-4 text-error">
-          <p className="font-medium">Error loading chunks</p>
-          <p className="text-sm">{error}</p>
+        <div className="rounded-xl bg-error/10 p-4 text-error flex flex-col items-start gap-3">
+          <div>
+            <p className="font-medium">Couldn't load this document</p>
+            <p className="text-sm opacity-90">{error}</p>
+          </div>
+          <button
+            onClick={() => loadChunks(true)}
+            className="rounded-lg bg-error/15 px-3 py-1.5 text-sm font-medium text-error hover:bg-error/25 transition-colors"
+          >
+            Try again
+          </button>
         </div>
       )}
-      
+
       {!loading && !error && chunks.length === 0 && (
         <div className="text-secondary">No chunks found for this document.</div>
       )}
