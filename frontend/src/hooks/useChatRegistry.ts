@@ -211,10 +211,14 @@ export function useChatRegistry() {
                 const streamedText = streamed && streamed.kind === 'agent' ? streamed.text : ''
                 // On failure, keep whatever already streamed instead of overwriting it with
                 // the raw backend error (payload.note) — the turn's error status already
-                // surfaces a Retry affordance. Only fall back to a generic message if
-                // nothing streamed at all.
+                // surfaces a Retry affordance. What streamed before a failure is often only
+                // a thinking/reasoning trace with no real answer in it, which would otherwise
+                // look like a finished (if odd) response, so make the cutoff explicit; fall
+                // back to a generic message if nothing streamed at all.
                 const finalText = isError
-                  ? streamedText.trim() || "Something went wrong generating a response."
+                  ? streamedText.trim()
+                    ? `${streamedText}\n\n*⚠️ Response was interrupted before finishing.*`
+                    : 'Something went wrong generating a response.'
                   : stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.')
                 // Replace the streaming turn in-place with the finalized version
                 return {
