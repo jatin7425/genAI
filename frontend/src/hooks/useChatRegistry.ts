@@ -1,10 +1,11 @@
+import type { ChatAttachment } from '../api/attachments'
 import { useCallback, useRef, useState } from 'react'
 import { streamChat } from '../api/chat'
-import type { ChatDonePayload } from '../api/types'
+import type { ChatDonePayload, ProviderIssue } from '../api/types'
 import { stripToolTagWrapper } from '../utils/text'
 
 export type ChatTurn =
-  | { kind: 'user'; id: string; text: string }
+  | { kind: 'user'; id: string; text: string; attachments?: ChatAttachment[] }
   | { kind: 'agent'; id: string; text: string; status: ChatDonePayload['status']; streaming?: boolean }
   | { kind: 'question'; id: string; text: string }
 
@@ -20,6 +21,7 @@ export type ConversationRuntime = {
   status: 'idle' | 'streaming'
   awaitingAnswer: boolean
   dirty: boolean
+  providerIssue?: ProviderIssue
 }
 
 const EMPTY_RUNTIME = (persona: string, model: string | null = null): ConversationRuntime => ({
@@ -87,7 +89,7 @@ export function useChatRegistry() {
           [sessionId]: {
             ...entry,
             status: 'idle',
-            turns: [...entry.turns, { kind: 'agent', id: nextId(), text: '\n\n*Stream stopped.*', status: 'done', streaming: false }],
+            turns: [...entry.turns.map(turn => turn.kind === 'agent' && turn.streaming ? { ...turn, streaming: false } : turn), { kind: 'agent', id: nextId(), text: '\n\n*Stream stopped.*', status: 'done', streaming: false }],
             dirty: true,
           }
         }
@@ -97,7 +99,7 @@ export function useChatRegistry() {
   }, [])
 
   const sendMessage = useCallback(
-    (text: string, persona: string, model: string | null, options?: { retry?: boolean }) => {
+    (text: string, persona: string, model: string | null, options?: { retry?: boolean; attachments?: ChatAttachment[] }) => {
       const trimmed = text.trim()
       if (!trimmed) return
 
@@ -116,9 +118,10 @@ export function useChatRegistry() {
           [key]: {
             ...base,
             model: model ?? base.model,
-            turns: [...baseTurns, { kind: 'user', id: nextId(), text: trimmed }],
+            turns: [...baseTurns, { kind: 'user', id: nextId(), text: trimmed, attachments: options?.attachments }],
             thinking: [],
             status: 'streaming',
+            providerIssue: undefined,
             dirty: true,
           },
         }
@@ -143,7 +146,7 @@ export function useChatRegistry() {
       let streamingTurnId: string | null = null
 
       void streamChat(
-        { sessionId: registry[key]?.sessionId ?? key, message: trimmed, persona, model, retry: options?.retry },
+        { sessionId: registry[key]?.sessionId ?? key, message: trimmed, persona, model, retry: options?.retry, attachments: options?.attachments },
         {
           onSession: (newSessionId) => {
             const oldKey = effectiveKey
@@ -203,7 +206,8 @@ export function useChatRegistry() {
             finishLocalDrive()
           },
           onDone: (payload) => {
-            const isError = payload.status === 'error'
+            const isError = payload.status !== 'done'
+            const failureMessage = payload.provider_issue?.message || (payload.status === 'max_iterations' ? 'This response reached its step limit before finishing. Try again or switch models.' : 'The response could not be completed. Try again or switch models.')
             const targetId = streamingTurnId
             patch((r) => {
               if (targetId) {
@@ -214,7 +218,7 @@ export function useChatRegistry() {
                 // surfaces a Retry affordance. Only fall back to a generic message if
                 // nothing streamed at all.
                 const finalText = isError
-                  ? streamedText.trim() || "Something went wrong generating a response."
+                  ? `${streamedText.trim()}${streamedText.trim() ? '\n\n---\n\n' : ''}${failureMessage}`
                   : stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.')
                 // Replace the streaming turn in-place with the finalized version
                 return {
@@ -225,6 +229,7 @@ export function useChatRegistry() {
                       : t,
                   ),
                   awaitingAnswer: false,
+                  providerIssue: payload.provider_issue,
                   status: 'idle',
                   dirty: true,
                 }
@@ -232,7 +237,7 @@ export function useChatRegistry() {
               // Fallback: no streaming turns received (e.g. tool-only response, or an
               // error before any tokens arrived)
               const finalText = isError
-                ? "Something went wrong generating a response."
+                ? failureMessage
                 : stripToolTagWrapper(payload.answer ?? payload.note ?? 'The agent did not return an answer.')
               return {
                 ...r,
@@ -241,6 +246,7 @@ export function useChatRegistry() {
                   { kind: 'agent', id: nextId(), text: finalText, status: payload.status },
                 ],
                 awaitingAnswer: false,
+                providerIssue: payload.provider_issue,
                 status: 'idle',
                 dirty: true,
               }
@@ -250,7 +256,7 @@ export function useChatRegistry() {
           onError: (error) => {
             patch((r) => ({
               ...r,
-              turns: [...r.turns, { kind: 'agent', id: nextId(), text: `Request failed: ${error.message}`, status: 'error' }],
+              turns: [...r.turns.map(turn => turn.kind === 'agent' && turn.streaming ? { ...turn, streaming: false, status: 'error' as const } : turn), { kind: 'agent', id: nextId(), text: error.message, status: 'error' }],
               status: 'idle',
               dirty: true,
             }))
@@ -344,6 +350,15 @@ export function useChatRegistry() {
     })
   }, [])
 
+  const selectModel = useCallback((model: string) => {
+    if (!activeKey) return
+    setRegistry(previous => {
+      const entry = previous[activeKey]
+      if (!entry || entry.status === 'streaming') return previous
+      return { ...previous, [activeKey]: { ...entry, model, providerIssue: undefined, dirty: true } }
+    })
+  }, [activeKey])
+
   const active = activeKey ? registry[activeKey] : null
   const streamingSessionIds = new Set(
     Object.values(registry)
@@ -359,6 +374,7 @@ export function useChatRegistry() {
     startNewChat,
     openConversation,
     sendMessage,
+    selectModel,
     stopMessage,
     injectOlderTurns,
     markRemoteStreaming,

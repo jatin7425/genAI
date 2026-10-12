@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.utils import llm_client
 from src.utils.web_search import webSearch
 from src.utils.common_tools import CommonTools
+from src.utils.provider_errors import ProviderError
 from src.utils.time_context import with_current_context
 
 class WebSearchAgent:
@@ -104,7 +105,7 @@ class WebSearchAgent:
             titles, or facts that didn't come from a tool result.
             """)
 
-    def web_search_agent(self, query, max_iterations=None, on_token=None, on_event=None):
+    def web_search_agent(self, query, max_iterations=None, on_token=None, on_event=None, model=None):
         if not max_iterations:
             max_iterations = self.max_iterations
         tools = self._tool() + [CommonTools().response_format()]
@@ -117,6 +118,8 @@ class WebSearchAgent:
             if on_event:
                 on_event(kind, content)
 
+        searched = False
+        requested_search = False
         for _ in range(max_iterations):
             accumulated_content = ""
             final_tool_calls = None
@@ -124,41 +127,25 @@ class WebSearchAgent:
 
             try:
                 for delta in self.llm_client.call_api_stream("chat", {
-                    "model": "nvidia",
+                    "model": model or "nvidia",
                     "messages": with_current_context(messages),
                     "tools": tools,
                 }):
-                    reasoning_text = delta.get("reasoning_content") or ""
-                    if reasoning_text:
-                        if not in_think_block:
-                            prefix = "\n\n🔍 **Web Search Thinking:**\n> "
-                            accumulated_content += prefix
-                            if on_token:
-                                on_token(prefix)
-                            in_think_block = True
-                        
-                        formatted = reasoning_text.replace("\n", "\n> ")
-                        accumulated_content += formatted
-                        if on_token:
-                            on_token(formatted)
-                    
+                    if delta.get("reasoning_content") and not in_think_block:
+                        emit("thinking", "Researching…")
+                        in_think_block = True
                     chunk_text = delta.get("content") or ""
                     if chunk_text:
-                        if in_think_block:
-                            suffix = "\n\n"
-                            accumulated_content += suffix
-                            if on_token:
-                                on_token(suffix)
-                            in_think_block = False
-                        
                         accumulated_content += chunk_text
                         if on_token:
                             on_token(chunk_text)
 
                     if delta.get("accumulated_tool_calls"):
                         final_tool_calls = delta["accumulated_tool_calls"]
-            except Exception as e:
-                return {"answer": None, "sources": [], "confidence": "low", "note": f"LLM stream failed: {e}"}
+            except ProviderError:
+                raise
+            except Exception:
+                return {"answer": None, "sources": [], "confidence": "low", "note": "The web search response could not be completed. Try again."}
 
             message = {"role": "assistant", "content": accumulated_content or None}
             if final_tool_calls:
@@ -167,27 +154,38 @@ class WebSearchAgent:
 
             tool_calls = message.get("tool_calls")
             if not tool_calls:
-                # model answered in free text instead of calling submit_answer — treat as fallback
+                if not searched:
+                    if not requested_search:
+                        messages.append({"role": "user", "content": "Use duckduckgo_search to research this request before answering. Do not stop at a search plan."})
+                        requested_search = True
+                        continue
+                    raise ProviderError("research_unavailable", "The research model did not run the search tools. Switch models and try again.", model)
+                if not accumulated_content.strip():
+                    raise ProviderError("empty_response", "The research model ended without an answer. Switch models and try again.", model)
                 return {"answer": message.get("content"), "sources": [], "confidence": "unknown"}
 
-            print(f"message: {json.dumps(message, indent=2, default=str)}")
-            print("\n\n\n")
             for call in tool_calls:
                 name = call["function"]["name"]
-                args = json.loads(call["function"]["arguments"])
+                try:
+                    args = json.loads(call["function"]["arguments"])
+                except (ValueError, TypeError):
+                    args = {}
 
                 if name == "submit_answer":
-                    return args
+                    if searched:
+                        return args
+                    result = {"error": "Search the web and verify information before submitting the answer."}
                 elif name == "duckduckgo_search":
+                    emit("thinking", "Searching the web…")
+                    searched = True
                     result = self.web_search.duckduckgo_search(**args)
                 elif name == "search_engine":
+                    emit("thinking", "Checking a source…")
                     result = self.web_search.search_engine(**args) or {"error": "failed to fetch page"}
                 elif name in self.common_tools.tool_list():
                     result = CommonTools().call_tool(name, args)
                 else:
                     result = {"error": f"unknown tool {name}"}
-                print(f"Tool {name} returned: {json.dumps(result, indent=2, default=str)}")
-                print("\n\n\n")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call["id"],

@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import urlencode
 import requests
 import base64
+from src.utils.provider_errors import ProviderError, provider_error
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -129,7 +130,14 @@ class llmClient:
         for url in urls:
             try:
                 response = requests.post(url, json=request_payload, headers=headers, stream=True, timeout=60)
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    try:
+                        body = response.json()
+                    except ValueError:
+                        body = {"error": response.text[:2000]}
+                    issue = provider_error(response.status_code, body, response.headers, payload.get("model"))
+                    response.close()
+                    raise issue
 
                 # tool_calls accumulator: list[dict] indexed by tool call index
                 accumulated_tool_calls: list[dict] = []
@@ -148,6 +156,11 @@ class llmClient:
                     except _json.JSONDecodeError:
                         continue
 
+                    if chunk.get("error"):
+                        error = chunk["error"]
+                        code = error.get("code", 500) if isinstance(error, dict) else 500
+                        status = int(code) if str(code).isdigit() else 500
+                        raise provider_error(status, chunk, model=payload.get("model"))
                     choices = chunk.get("choices", [])
                     if not choices:
                         continue
@@ -180,7 +193,9 @@ class llmClient:
                 last_error = e
                 continue
 
-        raise Exception(f"All streaming endpoints failed. Last error: {last_error}")
+        if isinstance(last_error, ProviderError):
+            raise last_error
+        raise ProviderError("provider_unavailable", "This model’s provider is unavailable right now. Try again or switch models.", payload.get("model")) from last_error
 
 
     def list_models(self) -> list[dict[str, Any]]:

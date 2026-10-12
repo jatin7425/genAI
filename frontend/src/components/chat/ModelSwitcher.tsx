@@ -4,11 +4,12 @@ import { Icon } from '../Icon'
 import { fetchModels } from '../../api/models'
 
 type ModelSwitcherProps = {
+  disabled?: boolean
   activeModel: string | null
   onSelectModel: (model: string) => void
 }
 
-export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps) {
+export function ModelSwitcher({ activeModel, onSelectModel, disabled = false }: ModelSwitcherProps) {
   const [open, setOpen] = useState(false)
   const popoverRef = usePopover(open, () => setOpen(false))
   const [models, setModels] = useState<string[]>([])
@@ -27,27 +28,31 @@ export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps
       .finally(() => setLoading(false))
   }
 
+  useEffect(() => { if (disabled) setOpen(false) }, [disabled])
+
   useEffect(load, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div ref={popoverRef} className="relative workspace-switcher">
       <button
+        disabled={disabled}
+        title={disabled ? "Stop the current response before switching models" : "Switch the model for this conversation"}
         aria-expanded={open}
         aria-label="Choose model"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-2 sm:px-3 py-2 hover:bg-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
       >
         <Icon name="tune" className="text-on-surface-variant text-[18px]" />
-        <span className="hidden sm:inline font-body-md text-on-surface font-medium text-sm max-w-[100px] truncate">
+        <span className="inline font-body-md text-on-surface font-medium text-sm max-w-[90px] truncate">
           {activeModel ?? 'Model'}
         </span>
         <Icon name="keyboard_arrow_down" className="text-on-surface-variant" />
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-unit w-56 bg-surface-container-high border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md overflow-hidden flex flex-col py-2 z-10">
+        <div className="absolute top-full right-0 mt-unit w-80 max-w-[calc(100vw-2rem)] max-sm:fixed max-sm:top-[64px] max-sm:left-4 max-sm:right-4 max-sm:w-auto bg-surface-container-high border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md overflow-hidden flex flex-col py-2 z-10">
           <div className="px-4 py-2 border-b border-outline-variant mb-2">
-            <span className="font-label-caps text-label-caps text-on-surface-variant">MODE / MODEL</span>
+            <span className="font-label-caps text-label-caps text-on-surface-variant">CONVERSATION MODEL</span>
           </div>
 
           {loading && <div className="px-4 py-2 text-on-surface-variant text-xs">Loading models...</div>}
@@ -75,7 +80,7 @@ export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps
                 }`}
               >
                 {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />}
-                <span className="flex-1 truncate text-sm">{model}</span>
+                <span title={model} className="flex-1 break-all text-sm leading-relaxed">{model}</span>
                 {isActive && <Icon name="check_circle" filled className="text-primary text-sm" />}
               </button>
             )

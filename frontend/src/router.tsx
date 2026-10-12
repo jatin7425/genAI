@@ -4,7 +4,6 @@ const LoginScreen = lazy(() => import('./screens/LoginScreen').then(module => ({
 const NewChatScreen = lazy(() => import('./screens/NewChatScreen').then(module => ({ default: module.NewChatScreen })))
 const ChatConversationScreen = lazy(() => import('./screens/ChatConversationScreen').then(module => ({ default: module.ChatConversationScreen })))
 const SettingScreen = lazy(() => import('./screens/SettingScreen').then(module => ({ default: module.SettingScreen })))
-const DocumentDetailScreen = lazy(() => import('./screens/DocumentDetailScreen').then(module => ({ default: module.DocumentDetailScreen })))
 import { ChatLayout } from './layouts/ChatLayout'
 import { useAuth } from './hooks/useAuth'
 
@@ -44,7 +43,7 @@ const router = createBrowserRouter([
       { path: '/chat', element: <NewChatScreen /> },
       { path: '/chat/:sessionId', element: <ChatConversationScreen /> },
       { path: '/settings', element: <SettingScreen /> },
-      { path: '/documents/:docId', element: <DocumentDetailScreen /> },
+      { path: '*', element: <Navigate to="/chat" replace /> },
     ],
   },
 ])

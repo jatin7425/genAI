@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.utils import llm_client
 from src.utils.common_tools import CommonTools
+from src.utils.provider_errors import ProviderError
 from src.utils.time_context import with_current_context
 from src.agents.agent_factory import agentFactory
 
@@ -76,7 +77,8 @@ class orchestrator:
         on_token=None,
         model=None,
         extra_tools=None,
-        extra_tool_dispatch=None
+        extra_tool_dispatch=None,
+        extra_context=None,
     ):
         """Run the agentic loop."""
         if not max_iterations:
@@ -89,6 +91,9 @@ class orchestrator:
                 on_event(kind, content)
 
         for _ in range(max_iterations):
+            context = extra_context() if extra_context else None
+            if context is not None:
+                messages.append({"role": "user", "content": context})
             # --- Stream one LLM turn -------------------------------------------
             accumulated_content = ""
             final_tool_calls = None
@@ -101,29 +106,11 @@ class orchestrator:
                     "messages": with_current_context(messages),
                     "tools": tools,
                 }):
-                    reasoning_text = delta.get("reasoning_content") or ""
-                    if reasoning_text:
-                        if not in_think_block:
-                            prefix = "🤔 **Thinking Process:**\n> "
-                            accumulated_content += prefix
-                            if on_token:
-                                on_token(prefix)
-                            in_think_block = True
-                        
-                        formatted = reasoning_text.replace("\n", "\n> ")
-                        accumulated_content += formatted
-                        if on_token:
-                            on_token(formatted)
-                    
+                    if delta.get("reasoning_content") and not in_think_block:
+                        emit("thinking", "Thinking…")
+                        in_think_block = True
                     chunk_text = delta.get("content") or ""
                     if chunk_text:
-                        if in_think_block:
-                            suffix = "\n\n"
-                            accumulated_content += suffix
-                            if on_token:
-                                on_token(suffix)
-                            in_think_block = False
-                        
                         accumulated_content += chunk_text
                         if on_token:
                             on_token(chunk_text)
@@ -132,13 +119,18 @@ class orchestrator:
                     if delta.get("accumulated_tool_calls"):
                         final_tool_calls = delta["accumulated_tool_calls"]
 
+            except ProviderError as exc:
+                # Never leave a tool-call turn without its required tool results.
+                for call in final_tool_calls or []:
+                    messages.append({"role": "tool", "tool_call_id": call["id"], "content": "Provider request failed."})
+                return {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": str(exc), "provider_issue": exc.issue}
             except Exception as exc:
                 return {
                     "status": "error",
                     "answer": None,
                     "sources": [],
                     "confidence": "low",
-                    "note": f"LLM stream failed: {exc}",
+                    "note": "The response could not be completed. Try again or switch models.",
                 }
 
             # Build the assistant message to append to history
@@ -149,6 +141,9 @@ class orchestrator:
 
             # --- No tool calls → direct answer ---------------------------------
             if not final_tool_calls:
+                if not accumulated_content.strip():
+                    issue = ProviderError("empty_response", "The model ended without an answer. Try again or switch models.", model)
+                    return {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": str(issue), "provider_issue": issue.issue}
                 emit("answer", accumulated_content)
                 return {
                     "status": "done",
@@ -169,9 +164,10 @@ class orchestrator:
                     emit("answer", args.get("answer"))
                     return {"status": "done", **args}
 
-                emit("thinking", f"Calling {name}({json.dumps(args)})")
+                emit("thinking", "Searching the web…" if name == "web_search_agent" else f"Using {name}…")
                 if name in self.agent_factory.agents_list_names():
-                    result = self.agent_factory.call_agents(name, on_token=on_token, on_event=emit, **args)
+                    agent_args = {**args, "model": model}
+                    result = self.agent_factory.call_agents(name, on_token=on_token, on_event=emit, **agent_args)
                 elif name in self.common_tools.tool_list():
                     result = self.common_tools.call_tool(name, args)
                 elif extra_tool_dispatch and name in extra_tool_dispatch:
@@ -181,7 +177,7 @@ class orchestrator:
                         result = {"error": f"{name} failed: {e}"}
                 else:
                     result = {"error": f"unknown tool {name}"}
-                emit("thinking", f"{name} → {json.dumps(result)[:500]}")
+                emit("thinking", f"{name} completed.")
 
                 messages.append({
                     "role": "tool",

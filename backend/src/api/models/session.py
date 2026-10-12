@@ -18,3 +18,4 @@ class Session:
         self.worker = None
         self.result_holder = {}
         self.awaiting_answer = False
+        self.pending_context = None

@@ -134,7 +134,7 @@ class webSearch:
 
     def duckduckgo_search(self, query, max_results=10):
         try:
-            with DDGS() as ddgs:
+            with DDGS(timeout=10) as ddgs:
                 results = []
                 for r in ddgs.text(query, max_results=max_results):
                     title, snippet = r["title"], r["body"]

@@ -10,4 +10,4 @@ class ModelService:
 
     def list_models(self):
         models = self.llm_client.list_models()
-        return [m["id"] for m in models if not m["id"].startswith(EXCLUDED_PREFIXES)]
+        return [m["id"] for m in models if m.get("mode", "chat") == "chat" and not m["id"].startswith(EXCLUDED_PREFIXES)]

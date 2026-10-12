@@ -1,3 +1,5 @@
+import { Attachments } from '../components/chat/Attachments'
+import type { ChatAttachment } from '../api/attachments'
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { useOutletContext, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
@@ -12,7 +14,7 @@ import { fetchConversationMessages } from '../api/conversations'
 
 export function ChatConversationScreen() {
   const { sessionId } = useParams<{ sessionId?: string }>()
-  const { turns, thinking, status, awaitingAnswer, onSend, onStop, onEditLastMessage, onRetry, injectOlderTurns, isReady } =
+  const { turns, thinking, status, awaitingAnswer, onSend, onStop, onEditLastMessage, onRetry, injectOlderTurns, isReady, providerIssue } =
     useOutletContext<ChatOutletContext>()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -163,6 +165,7 @@ export function ChatConversationScreen() {
 
               return (
                 <div key={turn.id} className="group flex flex-col items-end gap-1">
+                  <Attachments attachments={turn.attachments} />
                   <ChatBubble role="user">{turn.text}</ChatBubble>
                   {isLastUser && canEditOrRetry && (
                     <button
@@ -219,7 +222,8 @@ export function ChatConversationScreen() {
         </div>
       </div>
 
-      <ChatInputBar onSend={onSend} onStop={onStop} status={status} awaitingAnswer={awaitingAnswer} />
+      {providerIssue && <div role="alert" className="mx-4 md:mx-6 mb-2 rounded-xl border border-tertiary/30 bg-tertiary/10 px-4 py-3 text-sm flex gap-3 items-start"><Icon name="warning" className="text-tertiary text-[20px] mt-0.5" /><div><p className="font-medium">{providerIssue.model || 'Selected model'} · {providerIssue.code === 'provider_limit' ? 'Limit reached' : 'Provider notice'}</p><p className="text-on-surface-variant mt-1">{providerIssue.message}</p><p className="text-xs text-on-surface-variant mt-2">Use the model menu above, then choose Try again below the response.</p></div></div>}
+      <ChatInputBar key={sessionId || "new-chat"} onSend={onSend} onStop={onStop} status={status} awaitingAnswer={awaitingAnswer} />
     </div>
   )
 }
@@ -230,7 +234,7 @@ function ChatInputBar({
   status,
   awaitingAnswer,
 }: {
-  onSend: (text: string) => void
+  onSend: (text: string, attachments?: ChatAttachment[]) => void
   onStop: () => void
   status: 'idle' | 'streaming'
   awaitingAnswer: boolean

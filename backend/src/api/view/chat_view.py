@@ -1,6 +1,8 @@
 import queue
 import threading
 import uuid
+import time
+from src.utils.provider_errors import ProviderError
 
 from src.api.models.session import Session
 from src.api.utils.sse import sse
@@ -16,7 +18,8 @@ class ChatService:
     can show live progress for a conversation even if it didn't originate the
     request — not just the final saved result once it's done."""
 
-    def __init__(self, agent, persona_service, broadcaster, conversation_service=None):
+    def __init__(self, agent, persona_service, broadcaster, conversation_service=None, attachment_service=None):
+        self.attachment_service = attachment_service
         self.agent = agent
         self.persona_service = persona_service
         self.broadcaster = broadcaster
@@ -71,7 +74,14 @@ class ChatService:
 
                             for turn in recent_turns:
                                 role = "user" if turn.get("kind") == "user" else "assistant"
-                                session.messages.append({"role": role, "content": turn.get("text", "")})
+                                content = turn.get("text", "")
+                                if role == "user" and self.attachment_service and turn.get("attachments"):
+                                    ids = [a["id"] for a in turn["attachments"]]
+                                    try:
+                                        content = self.attachment_service.content(content, ids, session_id)
+                                    except Exception:
+                                        content += "\n[An earlier attachment is unavailable.]"
+                                session.messages.append({"role": role, "content": content})
                     except Exception as e:
                         import logging
                         logging.warning(f"Could not load history for {session_id}: {e}")
@@ -144,14 +154,42 @@ class ChatService:
 
             extra_tool_dispatch["search_current_chat"] = search_current_chat
 
-        result = self.agent.run(
-            session.messages,
-            on_event=on_event,
-            on_token=on_token,
-            model=session.model,
-            extra_tools=extra_tools,
-            extra_tool_dispatch=extra_tool_dispatch
-        )
+        if self.attachment_service:
+            extra_tools.extend([
+                {"type": "function", "function": {"name": "list_chat_attachments", "description": "List files attached to the current conversation.", "parameters": {"type": "object", "properties": {}}}},
+                {"type": "function", "function": {"name": "read_chat_attachment", "description": "Read more extracted text from a file in the current chat. Follow next_offset for longer files.", "parameters": {"type": "object", "properties": {"attachment_id": {"type": "string"}, "offset": {"type": "integer"}, "length": {"type": "integer"}}, "required": ["attachment_id"]}}},
+            ])
+            extra_tool_dispatch["list_chat_attachments"] = lambda: [self.attachment_service.metadata(a) for a in self.attachment_service.repository.list_for_session(session_id)]
+            extra_tool_dispatch["read_chat_attachment"] = lambda attachment_id, offset=0, length=12000: self.attachment_service.read(session_id, attachment_id, offset, length)
+
+        def take_pending_context():
+            content = session.pending_context
+            session.pending_context = None
+            return content
+
+        try:
+            result = self.agent.run(
+                session.messages,
+                on_event=on_event,
+                on_token=on_token,
+                model=session.model,
+                extra_tools=extra_tools,
+                extra_tool_dispatch=extra_tool_dispatch,
+                extra_context=take_pending_context,
+            )
+        except ProviderError as error:
+            result = {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": str(error), "provider_issue": error.issue}
+        except Exception:
+            result = {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": "The response could not be completed. Please try again."}
+        # A delegated provider can fail after the parent emitted tool calls.
+        # Complete that turn so subsequent model switches/follow-ups stay valid.
+        if result.get("status") == "error":
+            last_assistant = next((i for i in range(len(session.messages) - 1, -1, -1) if session.messages[i].get("role") == "assistant"), None)
+            if last_assistant is not None:
+                answered = {m.get("tool_call_id") for m in session.messages[last_assistant + 1:] if m.get("role") == "tool"}
+                for call in session.messages[last_assistant].get("tool_calls", []):
+                    if call["id"] not in answered:
+                        session.messages.append({"role": "tool", "tool_call_id": call["id"], "content": "The tool request could not be completed."})
         session.result_holder["result"] = result
         session.event_queue.put(("done", None))
         self.broadcaster.broadcast("chat_ended", {"session_id": session_id})
@@ -167,7 +205,15 @@ class ChatService:
             yield sse("done", session.result_holder["result"])
             return
 
+        started = time.monotonic()
+        heartbeat = started
         while True:
+            if time.monotonic() - started > 180:
+                yield sse("done", {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": "The response took too long. Try again or switch models."})
+                return
+            if time.monotonic() - heartbeat > 10:
+                yield ": heartbeat\n\n"
+                heartbeat = time.monotonic()
             try:
                 kind, content = session.event_queue.get(timeout=0.1)
             except queue.Empty:
@@ -179,6 +225,9 @@ class ChatService:
                 if "result" in session.result_holder and not (session.worker and session.worker.is_alive()):
                     yield sse("done", session.result_holder["result"])
                     return
+                if session.worker and not session.worker.is_alive() and "result" not in session.result_holder:
+                    yield sse("done", {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": "The response stopped unexpectedly. Try again."})
+                    return
                 continue
 
             if kind == "thinking":
@@ -189,14 +238,19 @@ class ChatService:
                 yield sse("done", session.result_holder.get("result", {}))
                 return
 
-    def handle_message(self, session_id, message, persona, model=None, retry=False):
+    def handle_message(self, session_id, message, persona, model=None, retry=False, attachment_ids=None):
         session_id = session_id or str(uuid.uuid4())
+        attachment_ids = attachment_ids or []
+        content = self.attachment_service.content(message, attachment_ids, session_id, bind=True) if self.attachment_service else message
         session = self._get_or_create_session(session_id, persona, model)
 
         already_running = session.worker is not None and session.worker.is_alive()
 
         if session.awaiting_answer:
             session.awaiting_answer = False
+            # Attachments become context even when answering the agent's clarification.
+            if attachment_ids:
+                session.pending_context = content
             session.bridge.answer_question(message)
             self.broadcaster.broadcast("chat_started", {"session_id": session_id})
         else:
@@ -216,7 +270,7 @@ class ChatService:
                 session.model = model
             if retry:
                 self._rewind_last_user_turn(session)
-            session.messages.append({"role": "user", "content": message})
+            session.messages.append({"role": "user", "content": content})
             session.result_holder.clear()
             worker = threading.Thread(target=self._run_agent_worker, args=(session, session_id), daemon=True)
             session.worker = worker

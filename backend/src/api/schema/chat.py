@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
@@ -10,3 +10,4 @@ class ChatRequest(BaseModel):
     # attempt) is discarded from history before `message` is appended, so the
     # agent regenerates from that point instead of continuing on top of it.
     retry: bool = False
+    attachment_ids: list[str] = Field(default_factory=list, max_length=6)

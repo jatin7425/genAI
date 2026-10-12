@@ -1,3 +1,5 @@
+import type { ProviderIssue } from '../api/types'
+import type { ChatAttachment } from '../api/attachments'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
@@ -11,7 +13,7 @@ import { useAuth } from '../hooks/useAuth'
 const DEFAULT_PERSONA = 'Default Assistant'
 
 export type ChatOutletContext = {
-  onSend: (text: string) => void
+  onSend: (text: string, attachments?: ChatAttachment[]) => void
   onStop: () => void
   onSelectPrompt: (title: string) => void
   onEditLastMessage: (newText: string) => void
@@ -22,6 +24,7 @@ export type ChatOutletContext = {
   status: 'idle' | 'streaming'
   awaitingAnswer: boolean
   isReady: boolean
+  providerIssue?: ProviderIssue
 }
 
 export function ChatLayout() {
@@ -41,6 +44,7 @@ export function ChatLayout() {
     startNewChat,
     openConversation,
     sendMessage,
+    selectModel,
     stopMessage,
     injectOlderTurns,
     markRemoteStreaming,
@@ -130,18 +134,18 @@ export function ChatLayout() {
   }
 
   const handleEditLastMessage = (newText: string) => {
-    sendMessage(newText, effectivePersona, effectiveModel, { retry: true })
+    sendMessage(newText, effectivePersona, effectiveModel, { retry: true, attachments: [...(active?.turns ?? [])].reverse().find(turn => turn.kind === 'user')?.attachments })
   }
 
   const handleRetry = () => {
     if (!active) return
     const lastUserTurn = [...active.turns].reverse().find((t) => t.kind === 'user')
     if (!lastUserTurn) return
-    sendMessage(lastUserTurn.text, effectivePersona, effectiveModel, { retry: true })
+    sendMessage(lastUserTurn.text, effectivePersona, effectiveModel, { retry: true, attachments: lastUserTurn.attachments })
   }
 
   const outletContext: ChatOutletContext = {
-    onSend: (text) => sendMessage(text, effectivePersona, effectiveModel),
+    onSend: (text, attachments) => sendMessage(text, effectivePersona, effectiveModel, { attachments }),
     onStop: () => {
       if (activeKey) stopMessage(activeKey)
     },
@@ -155,6 +159,7 @@ export function ChatLayout() {
     thinking: active?.thinking ?? [],
     status: active?.status ?? 'idle',
     awaitingAnswer: active?.awaitingAnswer ?? false,
+    providerIssue: active?.providerIssue,
     isReady: !!active && activeKey === urlSessionId,
   }
 
@@ -176,7 +181,7 @@ export function ChatLayout() {
         onSettings={() => navigate('/settings')}
         headerRightSlot={
           <div className="flex items-center gap-1 md:gap-3">
-            <ModelSwitcher activeModel={effectiveModel} onSelectModel={setActiveModel} />
+            <ModelSwitcher activeModel={effectiveModel} disabled={active?.status === 'streaming' || active?.awaitingAnswer} onSelectModel={model => { setActiveModel(model); selectModel(model) }} />
             <PersonaSwitcher
               activePersona={effectivePersona}
               refreshKey={personaRefreshKey}

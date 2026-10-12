@@ -9,5 +9,5 @@ router = APIRouter()
 
 @router.post("/chat")
 def chat(req: ChatRequest):
-    _, stream = chat_service.handle_message(req.session_id, req.message, req.persona, req.model, req.retry)
-    return StreamingResponse(stream, media_type="text/event-stream")
+    _, stream = chat_service.handle_message(req.session_id, req.message, req.persona, req.model, req.retry, req.attachment_ids)
+    return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

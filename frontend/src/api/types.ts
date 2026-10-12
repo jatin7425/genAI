@@ -1,3 +1,5 @@
+export type ProviderIssue = { code: string; message: string; model?: string; retry_after_seconds?: number | null }
+
 export type ChatDoneStatus = 'done' | 'error' | 'max_iterations'
 
 export type ChatDonePayload = {
@@ -6,6 +8,7 @@ export type ChatDonePayload = {
   sources: string[]
   confidence: 'high' | 'medium' | 'low' | 'unknown'
   note?: string
+  provider_issue?: ProviderIssue
 }
 
 export type ChatStreamHandlers = {

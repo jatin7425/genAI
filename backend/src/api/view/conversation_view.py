@@ -13,7 +13,8 @@ class ConversationService:
     """List/save/delete conversations, broadcasting every change through the
     shared EventBroadcaster so every connected browser sees it live."""
 
-    def __init__(self, repository, broadcaster):
+    def __init__(self, repository, broadcaster, attachment_repository=None):
+        self.attachment_repository = attachment_repository
         self.repository = repository
         self.broadcaster = broadcaster
 
@@ -40,4 +41,6 @@ class ConversationService:
 
     def delete_conversation(self, session_id):
         self.repository.delete(session_id)
+        if self.attachment_repository:
+            self.attachment_repository.delete_session(session_id)
         self.broadcaster.broadcast("deleted", {"session_id": session_id})

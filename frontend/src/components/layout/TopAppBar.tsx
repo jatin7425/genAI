@@ -5,7 +5,7 @@ import { Icon } from '../Icon'
 type TopAppBarProps = { onMenuClick?: () => void; rightSlot?: ReactNode; showMenuButton?: boolean }
 export function TopAppBar({ onMenuClick, rightSlot, showMenuButton = true }: TopAppBarProps) {
   const { pathname } = useLocation()
-  const label = pathname.startsWith('/settings') ? 'Settings' : pathname.startsWith('/documents') ? 'Knowledge library' : 'Your workspace'
+  const label = pathname.startsWith('/settings') ? 'Settings' : 'Your workspace'
   return (
     <header className="shrink-0 flex justify-between items-center px-5 md:px-8 h-[72px] w-full bg-background border-b border-outline-variant/70 z-10 gap-2">
       <div className="flex items-center gap-3 min-w-0">
