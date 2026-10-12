@@ -132,7 +132,7 @@ class FeatureTest(unittest.TestCase):
         db_module = types.ModuleType('src.db'); db_module.get_db = Mock()
         with patch.dict(sys.modules, {'src.db': db_module}): spec.loader.exec_module(module)
         collection = Mock()
-        collection.find_one.return_value = {'session_id': 'session-a', 'title': 'AI title', 'title_generated': True}
+        collection.find_one.return_value = {'_id': 'fixture', 'session_id': 'session-a', 'title': 'AI title', 'title_generated': True}
         repository = module.MongoConversationRepository.__new__(module.MongoConversationRepository)
         repository.collection = collection
         saved = repository.upsert({'session_id': 'session-a', 'title': 'Fallback text', 'turns': []})

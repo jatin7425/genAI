@@ -1,4 +1,5 @@
 from src.db import get_db
+from pymongo.errors import DuplicateKeyError
 
 
 class MongoConversationRepository:
@@ -9,24 +10,29 @@ class MongoConversationRepository:
 
     def __init__(self):
         self.collection = get_db()["conversations"]
+        self.collection.create_index("session_id")
 
     def list(self, skip: int = 0, limit: int = 20):
-        pipeline = [
-            {"$sort": {"updated_at": -1}},
-            {"$skip": skip},
-            {"$limit": limit},
-            {"$project": {"_id": 0, "turns": 0}}
+        grouped = [
+            {"$sort": {"updated_at": -1, "_id": -1}},
+            {"$group": {"_id": "$session_id", "conversation": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$conversation"}},
         ]
-        items = list(self.collection.aggregate(pipeline))
-        total = self.collection.count_documents({})
-        return {
-            "items": items,
-            "total": total,
-            "has_more": skip + limit < total
-        }
+        items = list(self.collection.aggregate(grouped + [
+            {"$sort": {"updated_at": -1, "session_id": 1}},
+            {"$skip": skip}, {"$limit": limit},
+            {"$project": {"_id": 0, "turns": 0}},
+        ]))
+        counts = list(self.collection.aggregate(grouped + [{"$count": "total"}]))
+        total = counts[0]["total"] if counts else 0
+        return {"items": items, "total": total, "has_more": skip + limit < total}
+
+    def _canonical(self, session_id):
+        # Read one consistent record for legacy sessions with duplicate documents.
+        return self.collection.find_one({"session_id": session_id}, sort=[("updated_at", -1), ("_id", -1)])
 
     def get_turns(self, session_id: int, skip: int = 0, limit: int = 20):
-        doc = self.collection.find_one({"session_id": session_id}, {"_id": 0, "turns": 1})
+        doc = self._canonical(session_id)
         if not doc or "turns" not in doc:
             return {"items": [], "total": 0, "has_more": False}
         
@@ -57,15 +63,27 @@ class MongoConversationRepository:
     def upsert(self, conversation):
         values = dict(conversation)
         title = values.pop("title")
-        self.collection.update_one({"session_id": conversation["session_id"]}, {"$set": values, "$setOnInsert": {"title": title}}, upsert=True)
-        return self.collection.find_one({"session_id": conversation["session_id"]}, {"_id": 0})
+        existing = self._canonical(conversation["session_id"])
+        # MongoDB's unique _id prevents concurrent first saves inserting twice.
+        document_id = existing["_id"] if existing else conversation["session_id"]
+        update = {"$set": values, "$setOnInsert": {"title": title}}
+        try:
+            self.collection.update_one({"_id": document_id}, update, upsert=True)
+        except DuplicateKeyError:
+            self.collection.update_one({"_id": document_id}, update)
+        saved = self.collection.find_one({"_id": document_id}, {"_id": 0})
+        return saved
 
     def has_generated_title(self, session_id):
-        return self.collection.find_one({"session_id": session_id, "title_generated": True}, {"_id": 1}) is not None
+        doc = self._canonical(session_id)
+        return bool(doc and doc.get("title_generated"))
 
     def set_title(self, session_id, title):
-        result = self.collection.update_one({"session_id": session_id, "title_generated": {"$ne": True}}, {"$set": {"title": title, "title_generated": True}})
+        doc = self._canonical(session_id)
+        if not doc:
+            return False
+        result = self.collection.update_one({"_id": doc["_id"], "title_generated": {"$ne": True}}, {"$set": {"title": title, "title_generated": True}})
         return result.matched_count > 0
 
     def delete(self, session_id):
-        self.collection.delete_one({"session_id": session_id})
+        self.collection.delete_many({"session_id": session_id})

@@ -32,7 +32,7 @@ await context.route('**/V1/**',async route=>{
  else if(path==='/V1/suggestions') body={suggestions:[{icon:'travel_explore',title:'Explore an idea',description:'Research a topic and turn what you find into clear insights.'},{icon:'code',title:'Build something',description:'Work through a coding problem, one step at a time.'},{icon:'lightbulb',title:'Make a plan',description:'Bring structure to your next project or big decision.'}]};
  else if(path==='/V1/conversations/stream') return route.fulfill({status:200,contentType:'text/event-stream',body:': heartbeat\n\n'});
  else if(path.startsWith('/V1/conversations/') && req.method()==='PUT') { const data=req.postDataJSON();const id=path.split('/').at(-1);const old=conversations.find(c=>c.session_id===id);if(old)Object.assign(old,data);else conversations.push({session_id:id,persona:data.persona,model:data.model,title:data.turns[0]?.text || 'New conversation',turns:data.turns,updated_at:new Date().toISOString()}); }
- else if(path==='/V1/conversations') body={items:conversations,total:1,has_more:false};
+ else if(path==='/V1/conversations') body={items:[...conversations,...conversations],total:conversations.length,has_more:false};
  else if(!path.includes('test-session') && path.endsWith('/messages')) body={items:conversations.find(item=>item.session_id===path.split('/')[3])?.turns || [],total:0,has_more:false};
  else if(path.endsWith('/messages')) body={items:[{id:'u1',kind:'user',text:'Help me plan a research project.'},{id:'a1',kind:'agent',text:'## A clear starting point\n\nStart with a focused question, then gather reliable sources.\n\n- Define the goal\n- Compare the evidence\n- Write a concise summary\n\n```python\nprint("Hello, Cortex")\n```',status:'done'}],total:2,has_more:false};
  else if(path==='/V1/attachments' && req.method()==='POST') {
@@ -57,6 +57,7 @@ try{
  await page.goto('http://127.0.0.1:4179/login');await page.getByText('Welcome back.').waitFor();await noOverflow();await page.screenshot({path:root+'/cortex-login.png'});
  await page.evaluate(()=>localStorage.setItem('cortex.authToken','ui-test-fixture'));
  await page.goto('http://127.0.0.1:4179/chat');await page.getByText('Where should we begin?').waitFor();await noOverflow();await page.screenshot({path:root+'/cortex-desktop.png'});
+ await page.getByRole('link',{name:'Planning a research project',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Planning a research project',exact:true}).count(),1);
  assert(!await page.getByRole('button',{name:'Send message',exact:true}).isEnabled());
  await page.getByLabel('Message Cortex',{exact:true}).fill('First line');await page.getByLabel('Message Cortex',{exact:true}).press('Shift+Enter');assert((await page.getByLabel('Message Cortex',{exact:true}).inputValue()).includes('\n'));assert.equal(chatRequests.length,0);
  await page.getByRole('button',{name:'Choose model'}).click();await page.getByRole('button',{name:'nvidia/nemotron-3-super-120b-a12b',exact:true}).click();assert(await page.getByRole('button',{name:'Choose model'}).innerText().then(s=>s.includes('nvidia/nemotron-3-super-120b-a12b')));
@@ -76,6 +77,7 @@ try{
  await page.goto('http://127.0.0.1:4179/chat/test-session');await page.getByText('A clear starting point').waitFor();await noOverflow();await page.screenshot({path:root+'/cortex-conversation.png'});
  await page.getByRole('button',{name:'Choose persona'}).click();await page.getByRole('button',{name:'Edit current persona',exact:true}).click();await page.getByRole('dialog',{name:'Edit persona'}).waitFor();await page.keyboard.press('Escape');
  await page.getByRole('link',{name:/New conversation/}).click();await page.getByText('Where should we begin?').waitFor();await page.getByLabel('Message Cortex',{exact:true}).fill('Help me research');await page.getByLabel('Message Cortex',{exact:true}).press('Enter');await page.getByText('Here is a thoughtful response.').waitFor();assert.equal(chatRequests.at(-1).message,'Help me research');
+ await page.waitForFunction(()=>!document.querySelector('[aria-label="Stop generating"]'));
  // Files are sent as attachment IDs, retained in history, and preserved on retries.
  await page.getByLabel('Choose attachments',{exact:true}).setInputFiles([{name:'notes.txt',mimeType:'text/plain',buffer:Buffer.from('Sample notes')},{name:'image.png',mimeType:'image/png',buffer:image}]);
  await page.getByLabel('Message Cortex',{exact:true}).fill('Summarize these attachments');

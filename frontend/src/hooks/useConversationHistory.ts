@@ -24,6 +24,15 @@ function fromServer(c: ServerConversation): StoredConversation {
   }
 }
 
+function uniqueConversations(items: StoredConversation[]): StoredConversation[] {
+  const byId = new Map<string, StoredConversation>()
+  for (const item of items) {
+    const previous = byId.get(item.sessionId)
+    if (!previous || item.updatedAt > previous.updatedAt) byId.set(item.sessionId, item)
+  }
+  return [...byId.values()]
+}
+
 const RECONNECT_DELAY_MS = 3000
 
 export type RemoteChatHandlers = {
@@ -37,6 +46,8 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
   const [conversations, setConversations] = useState<StoredConversation[]>([])
   const [hasMore, setHasMore] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const paginationOffset = useRef(0)
+  const loadingMore = useRef(false)
   
   const remoteChatHandlersRef = useRef(remoteChatHandlers)
   remoteChatHandlersRef.current = remoteChatHandlers
@@ -45,7 +56,8 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
     const doFetch = () => {
       fetchConversations(0, 20)
         .then((remote) => {
-          setConversations(remote.items.map(fromServer))
+          paginationOffset.current = remote.items.length
+          setConversations(uniqueConversations(remote.items.map(fromServer)))
           setHasMore(remote.has_more)
         })
         .catch(() => {
@@ -60,18 +72,21 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
   }, [])
 
   const loadMore = useCallback(async () => {
-    if (!hasMore || isLoadingMore) return
+    if (!hasMore || loadingMore.current) return
+    loadingMore.current = true
     setIsLoadingMore(true)
     try {
-      const res = await fetchConversations(conversations.length, 20)
-      setConversations(prev => [...prev, ...res.items.map(fromServer)])
+      const res = await fetchConversations(paginationOffset.current, 20)
+      paginationOffset.current += res.items.length
+      setConversations(prev => uniqueConversations([...prev, ...res.items.map(fromServer)]))
       setHasMore(res.has_more)
     } catch (err) {
       console.error(err)
     } finally {
+      loadingMore.current = false
       setIsLoadingMore(false)
     }
-  }, [hasMore, isLoadingMore, conversations.length])
+  }, [hasMore])
 
   // Live updates: any browser logged into this account gets pushed changes made by
   // any other one (or by this one), instead of only seeing its own local writes.
@@ -156,7 +171,7 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
       })
   }, [])
 
-  const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
+  const sorted = uniqueConversations(conversations).sort((a, b) => b.updatedAt - a.updatedAt)
 
   return { conversations: sorted, upsert, remove, loadMore, hasMore, isLoadingMore }
 }
