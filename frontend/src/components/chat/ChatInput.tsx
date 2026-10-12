@@ -1,80 +1,49 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Icon } from '../Icon'
 
 type ChatInputProps = {
-  placeholder?: string
-  onSend?: (value: string) => void
-  onStop?: () => void
-  isStreaming?: boolean
-  variant?: 'floating' | 'inline'
+  placeholder?: string; onSend?: (value: string) => void; onStop?: () => void
+  isStreaming?: boolean; variant?: 'floating' | 'inline'
 }
-
-export function ChatInput({ placeholder = 'Message Cortex...', onSend, onStop, isStreaming = false, variant = 'floating' }: ChatInputProps) {
+export function ChatInput({ placeholder = 'Message Cortex…', onSend, onStop, isStreaming = false, variant = 'floating' }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  const handleInput = () => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = '0px'
-    el.style.height = `${el.scrollHeight}px`
-  }
-
+  const [value, setValue] = useState('')
   const handleSend = () => {
-    if (isStreaming) return
-    const value = textareaRef.current?.value.trim()
-    if (!value || !onSend) return
-    onSend(value)
-    if (textareaRef.current) {
-      textareaRef.current.value = ''
-      textareaRef.current.style.height = '40px'
-    }
+    if (isStreaming || !value.trim() || !onSend) return
+    onSend(value.trim())
+    setValue('')
+    if (textareaRef.current) textareaRef.current.style.height = '64px'
   }
-
-  const wrapperClass =
-    variant === 'floating' ? 'absolute bottom-0 left-0 w-full p-gutter md:p-container-padding bg-background z-10' : 'w-full'
-
   return (
-    <div className={wrapperClass}>
-      <div className="max-w-4xl mx-auto relative group">
-        <div className={`w-full relative flex items-end bg-surface border border-outline-variant rounded-xl p-3 transition-all shadow-lg ${!isStreaming ? 'focus-within:border-primary focus-within:ring-1 focus-within:ring-primary' : 'opacity-80'}`}>
-          <textarea
-            ref={textareaRef}
-            onInput={handleInput}
-            disabled={isStreaming}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
-              }
+    <div className={variant === 'floating' ? 'absolute bottom-0 left-0 w-full p-4 md:p-6 bg-background z-10' : 'w-full'}>
+      <div className="max-w-[820px] mx-auto">
+        <div className="composer">
+          <textarea ref={textareaRef} value={value}
+            onChange={e => {
+              setValue(e.target.value)
+              e.target.style.height = '64px'
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`
             }}
-            className="w-full bg-transparent border-none text-on-surface font-body-md text-body-md resize-none focus:ring-0 p-2 max-h-32 overflow-y-auto focus:outline-none disabled:opacity-50"
-            placeholder={isStreaming ? 'Cortex is responding...' : placeholder}
-            rows={1}
-            style={{ minHeight: '40px' }}
-          />
-          
-          {isStreaming ? (
-            <button
-              onClick={onStop}
-              className="p-2 bg-error text-on-error hover:bg-error-container hover:text-on-error-container rounded-lg transition-colors shrink-0"
-              title="Stop generating"
-            >
-              <Icon name="stop" filled />
-            </button>
-          ) : (
-            <button
-              onClick={handleSend}
-              className="p-2 bg-primary-container text-on-primary-container hover:bg-primary-fixed rounded-lg transition-colors shrink-0"
-            >
-              <Icon name="send" filled />
-            </button>
-          )}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend() }
+            }}
+            disabled={isStreaming} aria-label="Message Cortex"
+            className="w-full min-h-16 max-h-44 bg-transparent resize-none outline-none text-sm leading-relaxed placeholder:text-on-surface-variant/70 disabled:opacity-60"
+            placeholder={isStreaming ? 'Cortex is working on your response…' : placeholder} rows={2} />
+          <div className="flex justify-between items-center gap-3 mt-2">
+            <span className="inline-flex items-center gap-2 text-xs text-on-surface-variant"><Icon name="auto_awesome" className="text-[15px] text-primary" /> Your thinking partner</span>
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline text-[10px] text-on-surface-variant/70">Shift + Enter for a new line</span>
+              <button type="button" onClick={isStreaming ? onStop : handleSend}
+                disabled={isStreaming ? !onStop : !value.trim() || !onSend}
+                aria-label={isStreaming ? 'Stop generating' : 'Send message'}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors disabled:opacity-35 disabled:cursor-not-allowed ${isStreaming ? 'bg-error text-on-error' : 'bg-primary text-on-primary hover:bg-primary-fixed'}`}>
+                <Icon name={isStreaming ? 'stop' : 'arrow_upward'} className="text-[19px]" />
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="text-center mt-2">
-          <p className="font-label-caps text-label-caps text-on-surface-variant opacity-60 uppercase tracking-widest">
-            Cortex AI can make mistakes. Verify critical information.
-          </p>
-        </div>
+        <p className="text-center mt-3 text-[10px] text-on-surface-variant/70">A thoughtful assistant, not a final authority. Double-check what matters.</p>
       </div>
     </div>
   )

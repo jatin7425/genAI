@@ -118,7 +118,7 @@ export function ChatConversationScreen() {
         </button>
       )}
       <div ref={scrollRef} onScroll={handleScroll} className="chat-scroll overflow-y-auto p-container-padding pb-stack-lg h-full">
-        <div className="max-w-4xl mx-auto w-full flex-1 space-y-stack-md ">
+        <div className="max-w-[820px] mx-auto w-full flex-1 space-y-stack-md ">
           {hasMore && (
             <div ref={observerTarget} className="py-2 text-center text-secondary text-sm">
               {loadingMore ? 'Loading older messages...' : ''}
@@ -170,7 +170,7 @@ export function ChatConversationScreen() {
                         setEditValue(turn.text)
                         setEditingLast(true)
                       }}
-                      className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-1 text-xs text-on-surface-variant hover:text-on-surface transition-all"
+                      className="opacity-100 md:opacity-0 group-hover:opacity-100 focus-visible:opacity-100 flex items-center gap-1 px-2 py-1 text-xs text-on-surface-variant hover:text-on-surface transition-all"
                     >
                       <Icon name="edit" className="text-[14px]" />
                       Edit
@@ -236,7 +236,7 @@ function ChatInputBar({
   awaitingAnswer: boolean
 }) {
   return (
-    <div className="p-container-padding bg-background border-t border-outline-variant">
+    <div className="chat-composer-bar shrink-0 bg-background">
       <div className="max-w-7xl mx-auto w-full">
         <ChatInput
           variant="inline"
@@ -278,7 +278,7 @@ function AgentActionButtons({
   }
 
   return (
-    <div className={`flex items-center gap-2 mt-1 transition-opacity ${isFailed ? 'opacity-100' : 'opacity-0 md:opacity-0 group-hover:opacity-100'}`}>
+    <div className={`message-actions flex items-center gap-2 mt-1 transition-opacity ${isFailed ? 'opacity-100' : 'opacity-100 md:opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
       <button
         onClick={handleCopy}
         className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-md transition-colors"

@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useState, useRef, useEffect } from 'react'
 import { Icon } from '../Icon'
 import { API_V1, API_BASE_URL } from '../../api/config'
@@ -53,7 +54,7 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
       }
 
       const data = await res.json()
-      
+
       if (data.web_socket_connection) {
         const wsUrl = `${API_BASE_URL.replace(/^http/, 'ws')}${data.web_socket_connection}`
         const ws = new WebSocket(wsUrl)
@@ -77,7 +78,7 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
             console.error('Failed to parse websocket message', e)
           }
         }
-        
+
         ws.onerror = () => {
           setError('Lost connection to ingestion progress.')
           setTimeout(() => onClose(), 3000)
@@ -91,7 +92,7 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
         window.dispatchEvent(new CustomEvent('api_mutation'))
         onClose()
       }
-      
+
       setIsUploading(false)
     } catch (err: any) {
       setError(err.message || 'Failed to upload document')
@@ -102,14 +103,16 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
 
   const isIngesting = !!progressState
   const hasError = !!error
+  const busy = (isUploading || isIngesting) && !hasError && progressState?.stage !== 'completed'
+  const dialogRef = useDialogFocus(true, () => { if (!busy) onClose() })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Upload document" className="max-h-[90dvh] overflow-y-auto w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-bold text-on-surface">Upload Document</h2>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose} aria-label="Close upload"
             disabled={(isUploading || isIngesting) && !hasError && progressState?.stage !== 'completed'}
             className="rounded-full p-2 text-on-surface-variant hover:bg-surface-container-high transition-colors disabled:opacity-50"
           >
@@ -153,9 +156,7 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
               <div className="w-full px-4">
                 <div className="mb-6 flex justify-center">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary animate-pulse">
-                    <span className="material-symbols-outlined text-3xl animate-spin">
-                      {isUploading ? 'progress_activity' : 'autorenew'}
-                    </span>
+                    <Icon name="progress_activity" className="text-3xl animate-spin" />
                   </div>
                 </div>
                 <h3 className="mb-2 text-lg font-semibold text-on-surface">
@@ -164,7 +165,7 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
                 <p className="mb-6 h-10 text-sm text-on-surface-variant line-clamp-2">
                   {progressState?.message || 'Please wait while we set things up.'}
                 </p>
-                
+
                 {/* Progress Bar */}
                 <div className="flex flex-col gap-2">
                   <div className="flex justify-between text-xs font-bold text-primary">
@@ -174,7 +175,7 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
                     )}
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-highest">
-                    <div 
+                    <div
                       className="h-full bg-primary transition-all duration-300 ease-out"
                       style={{ width: `${progressState?.progress || 0}%` }}
                     />
@@ -199,18 +200,18 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
                   }
                 }}
               />
-              
-              <div 
+
+              <button type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className={`
-                  flex cursor-pointer flex-col items-center justify-center gap-2 
+                  w-full flex cursor-pointer flex-col items-center justify-center gap-2
                   rounded-xl border-2 border-dashed p-8 transition-colors
                   ${file ? 'border-primary bg-primary/5' : 'border-outline-variant hover:bg-surface-container-high'}
                 `}
               >
-                <Icon 
-                  name={file ? 'description' : 'upload_file'} 
-                  className={`text-4xl ${file ? 'text-primary' : 'text-on-surface-variant'}`} 
+                <Icon
+                  name={file ? 'description' : 'upload_file'}
+                  className={`text-4xl ${file ? 'text-primary' : 'text-on-surface-variant'}`}
                 />
                 <p className="text-center text-sm font-medium text-on-surface">
                   {file ? file.name : 'Click to select a file'}
@@ -220,7 +221,7 @@ export function UploadDocumentModal({ onClose }: UploadDocumentModalProps) {
                     {(file.size / 1024 / 1024).toFixed(2)} MB
                   </p>
                 )}
-              </div>
+              </button>
             </div>
 
             <div className="flex justify-end gap-3">

@@ -1,9 +1,10 @@
+import { lazy, Suspense } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
-import { LoginScreen } from './screens/LoginScreen'
-import { NewChatScreen } from './screens/NewChatScreen'
-import { ChatConversationScreen } from './screens/ChatConversationScreen'
-import { SettingScreen } from './screens/SettingScreen'
-import { DocumentDetailScreen } from './screens/DocumentDetailScreen'
+const LoginScreen = lazy(() => import('./screens/LoginScreen').then(module => ({ default: module.LoginScreen })))
+const NewChatScreen = lazy(() => import('./screens/NewChatScreen').then(module => ({ default: module.NewChatScreen })))
+const ChatConversationScreen = lazy(() => import('./screens/ChatConversationScreen').then(module => ({ default: module.ChatConversationScreen })))
+const SettingScreen = lazy(() => import('./screens/SettingScreen').then(module => ({ default: module.SettingScreen })))
+const DocumentDetailScreen = lazy(() => import('./screens/DocumentDetailScreen').then(module => ({ default: module.DocumentDetailScreen })))
 import { ChatLayout } from './layouts/ChatLayout'
 import { useAuth } from './hooks/useAuth'
 
@@ -49,5 +50,5 @@ const router = createBrowserRouter([
 ])
 
 export function AppRouter() {
-  return <RouterProvider router={router} />
+  return <Suspense fallback={<div className="min-h-dvh bg-background grid place-items-center text-sm text-on-surface-variant" role="status">Opening your workspace…</div>}><RouterProvider router={router} /></Suspense>
 }

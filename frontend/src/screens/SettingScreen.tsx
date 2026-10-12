@@ -9,6 +9,7 @@ import { showToast } from '../utils/toastState'
 const DEFAULT_PERSONA = 'Default Assistant'
 
 export function SettingScreen() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [personas, setPersonas] = useState<string[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -42,13 +43,27 @@ export function SettingScreen() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-background p-6 md:p-8 custom-scrollbar">
+    <div className="workspace-page flex h-full flex-col overflow-y-auto bg-background p-6 md:p-8 custom-scrollbar">
       <div className="mx-auto w-full max-w-2xl">
-        <h1 className="mb-1 text-2xl font-bold text-on-surface">Settings</h1>
-        <p className="mb-8 text-on-surface-variant">Manage the personas available in your conversations.</p>
+        <p className="text-xs text-primary font-medium mb-3">Make yourself at home</p>
+        <h1 className="mb-3 text-3xl font-semibold tracking-tight text-on-surface">Your workspace, your way.</h1>
+        <p className="mb-10 text-sm text-on-surface-variant">Fine-tune the experience and choose how Cortex works with you.</p>
+        <section className="mb-10">
+          <h2 className="text-sm font-semibold mb-3">Appearance</h2>
+          <div className="flex items-center justify-between gap-4 p-5 bg-surface border border-outline-variant rounded-2xl">
+            <div><p className="text-sm font-medium">A different light</p><p className="text-xs text-on-surface-variant mt-1">Choose the workspace that feels right.</p></div>
+            <div className="flex p-1 bg-surface-container rounded-xl">
+              {[false, true].map(value => <button key={String(value)} aria-pressed={dark === value} onClick={() => {
+                setDark(value)
+                document.documentElement.classList.toggle('dark', value)
+                localStorage.setItem('cortex.theme', value ? 'dark' : 'light')
+              }} className={`px-3 py-2 rounded-lg text-xs ${dark === value ? 'bg-surface shadow-sm text-primary font-semibold' : 'text-on-surface-variant'}`}>{value ? 'Dark' : 'Light'}</button>)}
+            </div>
+          </div>
+        </section>
 
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-on-surface-variant/70">Personas</h2>
+          <h2 className="text-sm font-semibold text-on-surface">Personas</h2>
           <button
             onClick={() => setCreateOpen(true)}
             className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-on-primary transition-colors hover:bg-primary/90"
@@ -60,7 +75,7 @@ export function SettingScreen() {
 
         {personas === null && !loadError && (
           <div className="flex items-center gap-3 py-6 text-sm text-on-surface-variant">
-            <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+            <Icon name="progress_activity" className="animate-spin text-[18px]" />
             Loading personas...
           </div>
         )}
@@ -78,13 +93,13 @@ export function SettingScreen() {
         )}
 
         {personas && personas.length > 0 && (
-          <div className="flex flex-col gap-2">
+          <div className="grid sm:grid-cols-2 gap-3">
             {personas.map((name) => {
               const isDefault = name === DEFAULT_PERSONA
               return (
                 <div
                   key={name}
-                  className="flex items-center gap-3 rounded-xl border border-outline-variant bg-surface-container px-4 py-3"
+                  className="flex items-center gap-3 rounded-2xl border border-outline-variant bg-surface px-4 py-5"
                 >
                   <PersonaAvatar name={name} size="w-9 h-9" />
                   <div className="min-w-0 flex-1">
@@ -94,6 +109,7 @@ export function SettingScreen() {
                   <button
                     onClick={() => setPendingDelete(name)}
                     disabled={isDefault}
+                    aria-label={`Delete ${name}`}
                     title={isDefault ? "The default persona can't be deleted" : 'Delete persona'}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
                   >

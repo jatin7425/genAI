@@ -55,7 +55,7 @@ export function DocumentDetailScreen() {
   const observerTarget = useInfiniteScroll(loadChunks, hasMore, loadingMore)
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-background p-6 md:p-8 custom-scrollbar">
+    <div className="workspace-page document-page flex h-full flex-col overflow-y-auto bg-background p-6 md:p-8 custom-scrollbar">
       <div className="mb-6">
         <button
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
@@ -79,7 +79,7 @@ export function DocumentDetailScreen() {
 
       {loading && (
         <div className="flex items-center gap-3 text-secondary">
-          <span className="material-symbols-outlined animate-spin">progress_activity</span>
+          <Icon name="progress_activity" className="animate-spin" />
           Loading chunks...
         </div>
       )}
@@ -106,7 +106,7 @@ export function DocumentDetailScreen() {
       {!loading && !error && chunks.length > 0 && (
         <div className="flex flex-col gap-4">
           {chunks.map((chunk) => (
-            <div key={chunk._id} className="flex flex-col gap-2 rounded-xl bg-surface-container p-5">
+            <div key={chunk._id} className="flex flex-col gap-2 rounded-2xl bg-surface border border-outline-variant p-6">
               <div className="flex items-center gap-3 text-sm text-secondary">
                 <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                   {chunk.modality.toUpperCase()}
@@ -128,7 +128,7 @@ export function DocumentDetailScreen() {
             <div ref={observerTarget} className="py-4 text-center text-secondary text-sm">
               {loadingMore ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
+                  <Icon name="progress_activity" className="animate-spin text-[16px]" />
                   Loading more chunks...
                 </span>
               ) : (

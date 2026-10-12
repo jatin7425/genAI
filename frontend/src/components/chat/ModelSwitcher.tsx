@@ -1,3 +1,4 @@
+import { usePopover } from '../../hooks/usePopover'
 import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
 import { fetchModels } from '../../api/models'
@@ -9,6 +10,7 @@ type ModelSwitcherProps = {
 
 export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps) {
   const [open, setOpen] = useState(false)
+  const popoverRef = usePopover(open, () => setOpen(false))
   const [models, setModels] = useState<string[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -28,8 +30,10 @@ export function ModelSwitcher({ activeModel, onSelectModel }: ModelSwitcherProps
   useEffect(load, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="relative mr-unit">
+    <div ref={popoverRef} className="relative workspace-switcher">
       <button
+        aria-expanded={open}
+        aria-label="Choose model"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-2 sm:px-3 py-2 hover:bg-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
       >

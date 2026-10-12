@@ -1,57 +1,56 @@
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Material-style dark palette from the Cortex Stitch design */
+  /* Cortex workspace palette: warm paper, forest green, quiet surfaces. */
   --color-on-tertiary: #482900;
-  --color-outline-variant: #494454;
+  --color-outline-variant: #dfe4dc;
   --color-secondary-fixed: #acedff;
-  --color-surface: #131313;
+  --color-surface: #ffffff;
   --color-on-tertiary-fixed-variant: #673d00;
-  --color-background: #131313;
+  --color-background: #fcfcf9;
   --color-on-tertiary-fixed: #2c1700;
-  --color-on-surface-variant: #cbc3d7;
-  --color-surface-container-highest: #353534;
+  --color-on-surface-variant: #64706a;
+  --color-surface-container-highest: #e2e9df;
   --color-on-tertiary-container: #3f2300;
   --color-on-secondary-container: #00424e;
   --color-surface-variant: #353534;
   --color-secondary-fixed-dim: #4cd7f6;
-  --color-tertiary: #ffb869;
-  --color-outline: #958ea0;
-  --color-primary-fixed: #f5f5f5;
+  --color-tertiary: #a26b37;
+  --color-outline: #99a99d;
+  --color-primary-fixed: #337859;
   --color-on-secondary: #003640;
   --color-surface-tint: #ffffff;
-  --color-on-error: #690005;
-  --color-primary: #ffffff;
-  --color-error: #ffb4ab;
-  --color-on-background: #e5e2e1;
+  --color-on-error: #ffffff;
+  --color-primary: #27644a;
+  --color-error: #b74242;
+  --color-on-background: #202b27;
   --color-tertiary-fixed-dim: #ffb869;
-  --color-surface-container: #201f1f;
+  --color-surface-container: #f5f7f2;
   --color-inverse-primary: #cfcfcf;
-  --color-surface-container-low: #1c1b1b;
-  --color-on-primary-fixed: #1a1a1a;
+  --color-surface-container-low: #f1f3ed;
+  --color-on-primary-fixed: #153b2b;
   --color-tertiary-fixed: #ffdcbb;
-  --color-surface-container-high: #2a2a2a;
-  --color-primary-fixed-dim: #e5e2e1;
-  --color-surface-container-lowest: #0e0e0e;
-  --color-on-error-container: #ffdad6;
-  --color-on-surface: #e5e2e1;
-  --color-on-primary-container: #1a1a1a;
+  --color-surface-container-high: #ecf0e8;
+  --color-primary-fixed-dim: #dce9df;
+  --color-surface-container-lowest: #f8faf6;
+  --color-on-error-container: #ffffff;
+  --color-on-surface: #202b27;
+  --color-on-primary-container: #ffffff;
   --color-surface-bright: #3a3939;
   --color-tertiary-container: #ca801e;
   --color-on-secondary-fixed-variant: #004e5c;
   --color-on-secondary-fixed: #001f26;
-  --color-on-primary: #1a1a1a;
-  --color-primary-container: #ffffff;
-  --color-error-container: #93000a;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #27644a;
+  --color-error-container: #922f2f;
   --color-inverse-surface: #e5e2e1;
   --color-secondary-container: #03b5d3;
   --color-surface-dim: #131313;
   --color-on-primary-fixed-variant: #4a4a4a;
-  --color-secondary: #4cd7f6;
+  --color-secondary: #3a736b;
   --color-inverse-on-surface: #313030;
 
   /* Spacing scale */
@@ -145,16 +144,65 @@
   }
 }
 
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
+
+:root { color-scheme: light; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+html, body, #root { min-height: 100%; margin: 0; }
+body { background: var(--color-background); color: var(--color-on-surface); }
+button, a, input, textarea { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), a { cursor: pointer; }
+button, a { touch-action: manipulation; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+::selection { background: #d7e9dc; color: #163d2b; }
+.cortex-icon { width: 1em; height: 1em; flex-shrink: 0; vertical-align: middle; }
+.workspace-main { min-width: 0; }
+.workspace-sidebar { width: 272px; box-shadow: none; border-right-color: var(--color-outline-variant); }
+.workspace-sidebar .sidebar-brand { border-bottom: 1px solid var(--color-outline-variant); padding: 8px 8px 24px; margin-bottom: 20px; }
+.workspace-sidebar .sidebar-new { background: var(--color-primary); color: white; border: 0; box-shadow: none; }
+.workspace-sidebar .sidebar-new:hover { background: var(--color-primary-fixed); transform: none; }
+.workspace-sidebar .conversation-link { border: 0; background: transparent; box-shadow: none; }
+.workspace-sidebar .conversation-link:hover { background: var(--color-surface-container-highest); transform: none; }
+.workspace-sidebar .conversation-link.is-active { background: var(--color-surface-container-highest); color: var(--color-primary); }
+.workspace-sidebar button[title='Log Out'] { font-size: 18px; }
+.composer { border: 1px solid var(--color-outline-variant); border-radius: 20px; background: var(--color-surface); box-shadow: 0 6px 26px #1d382b08; padding: 14px 16px 12px; transition: border-color .2s, box-shadow .2s; }
+.composer:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 9%, transparent); }
+.welcome-orbit { width: 64px; height: 64px; color: var(--color-primary); border-radius: 22px; display: grid; place-items: center; background: var(--color-surface-container-high); border: 1px solid var(--color-outline-variant); transform: rotate(-8deg); margin-bottom: 28px; }
+.welcome-orbit > * { transform: rotate(8deg); }
+.welcome-title { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(36px, 4vw, 54px); font-weight: 400; letter-spacing: -.045em; line-height: 1.15; }
+.prompt-card { min-height: 154px; border: 1px solid var(--color-outline-variant); background: var(--color-surface); border-radius: 16px; padding: 20px; text-align: left; transition: background .2s, border-color .2s, transform .2s; }
+.prompt-card:hover { background: var(--color-surface-container); border-color: var(--color-outline); transform: translateY(-3px); }
+.chat-scroll { min-height: 0; flex: 1; height: auto; padding-top: 36px; }
+.chat-composer-bar { padding: 16px 24px 24px; border-top: 0; }
+.agent-message { display: flex; gap: 14px; }
+.agent-mark { height: 30px; width: 30px; flex-shrink: 0; color: var(--color-primary); display: grid; place-items: center; margin-top: 3px; }
+.message-actions { padding-left: 44px; }
+.workspace-switcher { margin-right: 0; }
+.workspace-switcher > button { border-color: transparent; background: transparent; border-radius: 10px; }
+.workspace-switcher > button:hover { background: var(--color-surface-container-high); }
+.workspace-switcher > div { background: var(--color-surface); box-shadow: 0 12px 36px #122b1e15; max-height: 60dvh; overflow-y: auto; }
+.workspace-page { width: 100%; padding-top: 48px; }
+.document-page { max-width: 880px; margin: 0 auto; }
+.login-page { display: grid; grid-template-columns: 1fr 1fr; min-height: 100dvh; }
+.login-story { padding: 56px; display: flex; flex-direction: column; justify-content: space-between; background: #173e2f; color: #f3f6ec; position: relative; overflow: hidden; }
+.login-story::after { content: ''; position: absolute; width: 600px; height: 600px; bottom: -230px; right: -220px; border: 1px solid #b6d5aa35; border-radius: 50%; box-shadow: 0 0 0 70px #b6d5aa08, 0 0 0 140px #b6d5aa06, 0 0 0 210px #b6d5aa04; pointer-events: none; }
+.login-form-area { display: flex; align-items: center; justify-content: center; padding: 32px; }
+.login-form { width: 100%; max-width: 370px; }
+.login-form input { min-height: 48px; background: var(--color-surface); }
+.dark { color-scheme: dark; --color-background: #161d19; --color-surface: #1c2520; --color-on-background: #e4ebe2; --color-on-surface: #e4ebe2; --color-on-surface-variant: #a8b5ab; --color-primary: #a7d6ae; --color-primary-container: #a7d6ae; --color-on-primary: #193b28; --color-on-primary-container: #193b28; --color-primary-fixed: #c0e6c3; --color-outline-variant: #354238; --color-outline: #748b78; --color-secondary: #8fcbbf; --color-tertiary: #d3ad7e; --color-surface-container-lowest: #131a16; --color-surface-container-low: #131a16; --color-surface-container: #202b24; --color-surface-container-high: #29362d; --color-surface-container-highest: #324036; --color-error: #f19c9c; --color-on-error: #582626; }
+.dark .workspace-sidebar .sidebar-new { color: var(--color-on-primary); }
+@media (min-width: 768px) { .workspace-main { margin-left: 272px; } }
+@media (max-width: 767px) {
+  .workspace-sidebar { width: 100%; }
+  .welcome-title { font-size: 36px; }
+  .welcome-orbit { height: 50px; width: 50px; margin-bottom: 20px; border-radius: 16px; }
+  .prompt-card { min-height: auto; padding: 16px; }
+  .chat-scroll { padding: 20px 16px; }
+  .chat-composer-bar { padding: 10px 16px max(16px, env(safe-area-inset-bottom)); }
+  .workspace-page { padding-top: 28px; }
+  .login-page { grid-template-columns: 1fr; }
+  .login-story { padding: 28px; min-height: 260px; }
+  .login-story footer { display: none; }
+  .login-form-area { padding: 36px 24px; }
 }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+
+@layer base { .cortex-icon { font-size: 24px; } }

@@ -1,3 +1,4 @@
+import { Icon } from '../Icon'
 export function LiveThinkingTrace({ lines }: { lines: string[] }) {
   const displayLines = lines.length ? lines : ['Thinking...']
 
@@ -8,7 +9,7 @@ export function LiveThinkingTrace({ lines }: { lines: string[] }) {
         return (
           <div key={i} className="flex items-start gap-2">
             {isLast ? (
-              <span className="material-symbols-outlined text-[16px] animate-spin mt-[1px]">progress_activity</span>
+              <Icon name="progress_activity" className="text-[16px] animate-spin mt-[1px]" />
             ) : (
               <span className="text-[16px] leading-none mt-[1px]">&gt;</span>
             )}

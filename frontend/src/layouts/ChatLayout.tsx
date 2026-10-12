@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
 import { PersonaSwitcher } from '../components/persona/PersonaSwitcher'
@@ -75,14 +75,18 @@ export function ChatLayout() {
     }
   }, [activeKey, active, upsert, clearDirty])
 
+  // Clear the active chat on actual navigation to the new-chat route.
+  // History refreshes must not clear an in-flight first message before its
+  // session URL has been assigned.
+  useEffect(() => {
+    if (location.pathname === '/chat') startNewChat()
+  }, [location.pathname, startNewChat])
+
   // Sync URL → registry:
   //   /chat            → clear the active key (new chat state)
   //   /chat/:sessionId → open that conversation from history (deep link / Back button)
   useEffect(() => {
-    if (!urlSessionId) {
-      startNewChat()
-      return
-    }
+    if (!urlSessionId) return
     if (activeKey === urlSessionId) return
     const stored = conversations.find((c) => c.sessionId === urlSessionId)
     if (stored) {
@@ -182,7 +186,7 @@ export function ChatLayout() {
           </div>
         }
       >
-        <Outlet context={outletContext} />
+        <Suspense fallback={<div className="flex-1 grid place-items-center text-sm text-on-surface-variant" role="status">Loading…</div>}><Outlet context={outletContext} /></Suspense>
       </AppShell>
 
       {personaModalOpen && (

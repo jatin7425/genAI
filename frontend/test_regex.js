@@ -10,7 +10,7 @@ And here is more text.
 > Searching...
 > Found it!`
 
-const regex = /((?:?? \*\*Thinking Process:\*\*|?? \*\*Web Search Thinking:\*\*)\n(?:> .*(?:\n|$))+)/g
+const regex = /((?:\?\? \*\*Thinking Process:\*\*|\?\? \*\*Web Search Thinking:\*\*)\n(?:> .*(?:\n|$))+)/g
 const parts = content.split(regex)
 console.log(parts)
 

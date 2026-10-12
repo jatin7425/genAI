@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useState } from 'react'
 import { Icon } from '../Icon'
 import { createPersona } from '../../api/personas'
@@ -35,12 +36,13 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
     }
   }
 
+  const dialogRef = useDialogFocus(true, () => { if (!submitting) onClose?.() })
   return (
-    <div className="bg-surface-container-high border border-outline-variant rounded-xl shadow-[0px_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-md w-full max-w-4xl flex flex-col md:flex-row overflow-hidden">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Create persona" className="bg-surface border border-outline-variant rounded-2xl shadow-[0_20px_80px_rgba(20,40,25,0.18)] backdrop-blur-md max-h-[90dvh] overflow-y-auto w-full max-w-4xl flex flex-col md:flex-row">
       <div className="flex-1 p-stack-md border-r border-outline-variant flex flex-col gap-stack-sm overflow-y-auto">
         <div className="flex items-center justify-between mb-unit">
           <h2 className="font-headline-md text-headline-md text-on-surface">Create Persona</h2>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface transition-colors">
+          <button onClick={onClose} disabled={submitting} aria-label="Close persona editor" className="text-on-surface-variant hover:text-on-surface transition-colors">
             <Icon name="close" />
           </button>
         </div>
@@ -49,8 +51,8 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
         </p>
 
         <div className="space-y-unit">
-          <label className="font-label-caps text-label-caps text-on-surface-variant">IDENTITY</label>
-          <input
+          <label htmlFor="persona-name" className="font-label-caps text-label-caps text-on-surface-variant">IDENTITY</label>
+          <input id="persona-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full bg-surface-container border border-outline-variant rounded-lg px-3 py-2 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-on-surface-variant/50"
@@ -60,10 +62,10 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
         </div>
 
         <div className="space-y-unit flex-1 flex flex-col mt-stack-sm">
-          <label className="font-label-caps text-label-caps text-on-surface-variant flex justify-between items-center">
+          <label htmlFor="persona-prompt" className="font-label-caps text-label-caps text-on-surface-variant flex justify-between items-center">
             <span>SYSTEM PROMPT (BEHAVIOR RULES)</span>
           </label>
-          <textarea
+          <textarea id="persona-prompt"
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             className="w-full flex-1 min-h-[200px] bg-surface-container border border-outline-variant rounded-lg p-3 text-on-surface font-code-sm text-code-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
@@ -109,7 +111,7 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
         </div>
 
         <div className="p-stack-md flex justify-end gap-3 bg-surface-container-low">
-          <button
+          <button disabled={submitting}
             onClick={onClose}
             className="px-4 py-2 font-body-md text-on-surface hover:bg-surface-container-high rounded-lg transition-colors border border-transparent"
           >
@@ -120,7 +122,7 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
             disabled={!canSubmit}
             className="px-4 py-2 font-body-md bg-primary text-on-primary-container rounded-lg hover:bg-primary-container transition-colors shadow-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? 'Initializing...' : 'Initialize Persona'}
+            {submitting ? 'Creating…' : 'Create persona'}
           </button>
         </div>
       </div>

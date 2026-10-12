@@ -1,3 +1,4 @@
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { Icon } from '../Icon'
 
 type ConfirmDialogProps = {
@@ -21,9 +22,10 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useDialogFocus(true, () => { if (!busy) onCancel() })
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
-      <div
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) onCancel() }}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
         className="w-full max-w-sm rounded-2xl bg-surface-container-high border border-outline-variant p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >

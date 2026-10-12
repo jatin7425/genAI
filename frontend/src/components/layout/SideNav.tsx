@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { showToast } from '../../utils/toastState'
 
 type SideNavProps = {
+  onClose?: () => void
   forceVisible?: boolean
   conversations?: StoredConversation[]
   hasMoreConversations?: boolean
@@ -25,6 +26,7 @@ type SideNavProps = {
 
 export function SideNav({
   forceVisible = false,
+  onClose,
   conversations = [],
   hasMoreConversations = false,
   isLoadingMoreConversations = false,
@@ -39,6 +41,7 @@ export function SideNav({
 }: SideNavProps) {
   const navigate = useNavigate()
   const location = useLocation()
+  const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'chats' | 'documents'>('chats')
   const [docs, setDocs] = useState<APIDocument[]>([])
   const [docsHasMore, setDocsHasMore] = useState(true)
@@ -52,12 +55,12 @@ export function SideNav({
   const [deleting, setDeleting] = useState(false)
 
   const displayConversations = useMemo(() => {
-    return [...conversations].sort((a, b) => {
+    return conversations.filter(c => c.title.toLowerCase().includes(search.toLowerCase())).sort((a, b) => {
       if (a.sessionId === activeSessionId) return -1
       if (b.sessionId === activeSessionId) return 1
       return 0
     })
-  }, [conversations, activeSessionId])
+  }, [conversations, activeSessionId, search])
 
   const loadDocs = useCallback(async (reset = false) => {
     if ((!reset && !docsHasMore) || docsLoading) return
@@ -139,7 +142,7 @@ export function SideNav({
           ${forceVisible ? 'flex' : 'hidden md:flex'}
           ${forceVisible ? '' : 'fixed left-0 top-0'}
           z-20
-          h-full w-80
+          workspace-sidebar h-full
           flex-col
           border-r border-outline-variant/50
           bg-surface-container-low
@@ -147,25 +150,23 @@ export function SideNav({
           shadow-xl shadow-black/5
         `}
       >
-        <div className="mb-5 flex items-center gap-3 px-2 pt-2">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-2xl bg-primary/20 blur-lg" />
-            <div className="relative h-11 w-11 overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-high shadow-md flex items-center justify-center">
-              <Icon name="graphic_eq" filled className="text-primary text-[22px]" />
-            </div>
+        <div className="sidebar-brand flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary text-on-primary flex items-center justify-center">
+            <Icon name="graphic_eq" className="text-[23px]" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate font-headline-md text-lg font-semibold tracking-tight text-on-surface">Cortex</h1>
-            <p className="mt-0.5 truncate text-xs text-on-surface-variant">AI Assistant</p>
+            <p className="mt-0.5 truncate text-xs text-on-surface-variant">Your thinking partner</p>
           </div>
+          {forceVisible && <button onClick={onClose} aria-label="Close navigation" className="ml-auto p-2 text-on-surface-variant"><Icon name="close" className="text-[18px]" /></button>}
         </div>
 
         <NavLink
-          to="/"
+          to="/chat"
           end
-          onClick={onNewChat}
+          onClick={() => { onNewChat?.(); onClose?.() }}
           className={({ isActive }) =>
-            `group mb-5 flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all duration-200
+            `sidebar-new group mb-5 flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all duration-200
             ${isActive
               ? 'border-primary/30 bg-primary text-on-primary shadow-lg shadow-primary/20'
               : 'border-outline-variant/50 bg-surface-container text-on-surface hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-container-high hover:shadow-md'
@@ -176,7 +177,7 @@ export function SideNav({
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/5 transition-transform duration-200 group-hover:scale-110">
               <Icon name="add" className="text-[20px]" />
             </div>
-            <span className="text-sm font-semibold">New Chat</span>
+            <span className="text-sm font-semibold">New conversation</span>
           </div>
           <Icon name="arrow_forward" className="text-[18px] opacity-60 transition-transform duration-200 group-hover:translate-x-1" />
         </NavLink>
@@ -185,18 +186,18 @@ export function SideNav({
           <div className="mb-4 rounded-xl border border-outline-variant/40 bg-surface-container p-1">
             <div className="grid grid-cols-2 gap-1">
               <button
-                onClick={() => setActiveTab('chats')}
+                onClick={() => { setActiveTab('chats'); setSearch('') }} aria-pressed={activeTab === 'chats'}
                 className={`relative rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                   activeTab === 'chats' ? 'bg-surface-container-highest text-on-surface shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                 }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <Icon name="chat_bubble" className="text-[16px]" />
-                  Conversations
+                  Chats
                 </div>
               </button>
               <button
-                onClick={() => setActiveTab('documents')}
+                onClick={() => { setActiveTab('documents'); setSearch('') }} aria-pressed={activeTab === 'documents'}
                 className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                   activeTab === 'documents' ? 'bg-surface-container-highest text-on-surface shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                 }`}
@@ -209,10 +210,15 @@ export function SideNav({
             </div>
           </div>
 
+          <div className="mb-4 mx-1 flex items-center gap-2 rounded-lg border border-outline-variant/70 px-3 py-2.5 bg-background/50">
+            <Icon name="search" className="text-[15px] text-on-surface-variant" />
+            <input aria-label={activeTab === 'chats' ? 'Search conversations' : 'Search documents'} value={search} onChange={e => setSearch(e.target.value)} placeholder={activeTab === 'chats' ? 'Search conversations…' : 'Search documents…'} className="bg-transparent min-w-0 w-full outline-none text-xs placeholder:text-on-surface-variant/70" />
+          </div>
+
           {activeTab === 'chats' && (
             <div className="min-h-0 flex-1 overflow-y-auto px-1 custom-scrollbar">
-              {conversations.length === 0 ? (
-                <EmptyState icon="chat_bubble" title="No conversations" description="Start a new chat to begin exploring." />
+              {displayConversations.length === 0 ? (
+                <EmptyState icon="chat_bubble" title={search ? "No matching conversations" : "A fresh start"} description={search ? "Try a different search." : "Your conversations will find a home here."} />
               ) : (
                 <div className="space-y-1">
                   <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
@@ -225,16 +231,16 @@ export function SideNav({
                       <Link
                         key={conversation.sessionId}
                         to={`/chat/${conversation.sessionId}`}
-                        onClick={() => onOpenConversation?.(conversation)}
-                        className={`group/item flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
+                        onClick={() => { onOpenConversation?.(conversation); onClose?.() }}
+                        className={`conversation-link ${isActive ? 'is-active' : ''} group/item flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
                           isActive
                             ? 'border-primary/30 bg-primary/10 text-on-surface shadow-sm shadow-primary/20'
                             : 'border-outline-variant/50 bg-surface-container text-on-surface hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-container-high hover:shadow-md'
                         }`}
                       >
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-primary/15 text-primary' : 'bg-surface-container-highest'}`}>
+                        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-primary/15 text-primary' : 'bg-surface-container-highest'}`}>
                           {isStreaming ? (
-                            <span className="material-symbols-outlined animate-spin text-[17px] text-secondary" title="Still generating...">progress_activity</span>
+                            <Icon name="progress_activity" className="animate-spin text-[17px] text-secondary" />
                           ) : (
                             <Icon name="chat_bubble" className="text-[16px]" />
                           )}
@@ -249,7 +255,7 @@ export function SideNav({
                             e.stopPropagation()
                             setPendingDelete({ type: 'conversation', id: conversation.sessionId, label: conversation.title })
                           }}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:opacity-0 transition-all md:hover:bg-error/10 md:hover:text-error md:group-hover/item:opacity-100"
+                          aria-label={`Delete ${conversation.title}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:opacity-0 focus-visible:opacity-100 transition-all hover:bg-error/10 hover:text-error md:group-hover/item:opacity-100"
                         >
                           <Icon name="delete" className="text-[16px]" />
                         </button>
@@ -286,7 +292,8 @@ export function SideNav({
                       <Icon name="add" className="font-[14px]" />
                     </button>
                   </p>
-                  {docs.map((doc) => {
+                  {search && !docs.some(doc => (doc.filename || doc[' '] || '').toLowerCase().includes(search.toLowerCase())) && <p className="px-2 py-4 text-xs text-on-surface-variant">No matching documents. Try a different search.</p>}
+                  {docs.filter(doc => (doc.filename || doc[' '] || '').toLowerCase().includes(search.toLowerCase())).map((doc) => {
                     const filename = doc.filename || doc[' '] || 'Unknown Document'
                     const isFailed = doc.status === 'failed'
                     const isPending = doc.status === 'pending'
@@ -296,12 +303,13 @@ export function SideNav({
                       <Link
                         key={doc._id}
                         to={`/documents/${doc._id}`}
+                        onClick={onClose}
                         state={{ filename, status: doc.status, chunkCount: doc.chunk_count }}
                         className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-on-surface-variant transition-all hover:bg-surface-container-high hover:text-on-surface"
                       >
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isFailed ? 'bg-error/10 text-error' : 'bg-surface-container-highest'}`}>
+                        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${isFailed ? 'bg-error/10 text-error' : 'bg-surface-container-highest'}`}>
                           {isPending ? (
-                            <span className="material-symbols-outlined animate-spin text-[17px] text-secondary">progress_activity</span>
+                            <Icon name="progress_activity" className="animate-spin text-[17px] text-secondary" />
                           ) : (
                             <Icon name={isFailed ? 'error' : 'description'} className="text-[17px]" />
                           )}
@@ -321,7 +329,7 @@ export function SideNav({
                             e.stopPropagation()
                             setPendingDelete({ type: 'document', id: doc._id, label: filename })
                           }}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:opacity-0 transition-all md:hover:bg-error/10 md:hover:text-error md:group-hover:opacity-100"
+                          aria-label={`Delete ${filename}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg md:opacity-0 focus-visible:opacity-100 transition-all hover:bg-error/10 hover:text-error md:group-hover:opacity-100"
                         >
                           <Icon name="delete" className="text-[16px]" />
                         </button>
