@@ -2,7 +2,8 @@ import { API_V1 } from './config'
 import { authFetch } from './http'
 import { readSseStream } from './sse'
 import type { ChatStreamHandlers } from './types'
-export type Companion = { id: string; attributes: Record<string, string>; description: string; updated_at: string }
+export type CompanionPhoto = { id: string; name: string; role: 'profile' | 'gallery'; width: number; height: number }
+export type Companion = { id: string; attributes: Record<string, string>; description: string; updated_at: string; profile_picture?: CompanionPhoto | null; photos?: CompanionPhoto[] }
 export type CompanionTurn = { id: string; kind: 'user' | 'agent'; text: string; status?: string }
 export type CompanionThread = { id: string; profile_id: string; turns: CompanionTurn[]; updated_at: string }
 const TOKEN_KEY = 'cortex.secretWorld'
@@ -50,4 +51,15 @@ export async function streamCompanion(id: string, message: string, model: string
   } catch (error) {
     if ((error as { name?: string }).name !== 'AbortError') handlers.onError?.(error instanceof Error ? error : new Error('Could not send message.'))
   }
+}
+
+export async function uploadCompanionPhoto(profileId: string, file: File, role: 'profile' | 'gallery'): Promise<Companion> {
+  const body = new FormData(); body.append('file', file); body.append('role', role)
+  return (await request(`/profiles/${encodeURIComponent(profileId)}/images`, { method: 'POST', body })).json()
+}
+export async function removeCompanionPhoto(profileId: string, imageId: string): Promise<Companion> {
+  return (await request(`/profiles/${encodeURIComponent(profileId)}/images/${encodeURIComponent(imageId)}`, { method: 'DELETE' })).json()
+}
+export async function companionPhotoBlob(profileId: string, imageId: string, signal: AbortSignal): Promise<Blob> {
+  return (await request(`/profiles/${encodeURIComponent(profileId)}/images/${encodeURIComponent(imageId)}`, { signal })).blob()
 }

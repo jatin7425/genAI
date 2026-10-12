@@ -95,3 +95,12 @@ The separate `/secret-world` interface creates fictional adult companions from f
 Profiles and private transcripts are stored separately in `companion_profiles` and `companion_threads`, scoped to the existing authenticated operator. They are excluded from normal conversations/personas. Private chats use the existing model switching, streaming, context budgeting, current-session retrieval, and shared user-memory services. Character KV fields are separate from shared user facts. Completed chat context is saved on the server, and each conversation can resume after a backend restart. Deleting a companion removes its private threads.
 
 Private API routes under `/V1/roleplay`: `POST /unlock`, `POST /lock`, `POST /extract`, `GET/POST /profiles`, `PUT/DELETE /profiles/{id}`, `GET /profiles/{id}/threads`, `POST /profiles/{id}/chat`. Companion browser regression: `node scripts/companion-smoke.mjs` (from frontend, with Playwright Chromium installed or `CORTEX_CHROMIUM_PATH` set). Backend and frontend redeployment is required.
+
+
+### Character photos
+
+Each character has one replaceable profile picture and up to 20 gallery photos. The Photos panel is available from gallery cards and the chat header, and opens after creating a character. Uploads are saved immediately; previews, replacement and removal do not reset chat history.
+
+`POST /V1/roleplay/profiles/{id}/images` accepts multipart `file` and `role` (`profile` or `gallery`). `GET /profiles/{id}/images/{image_id}` serves authenticated image bytes, and `DELETE` on the same path removes that image. All three require both authentication and the secret-world grant. Metadata is returned with profiles as `profile_picture` and `photos`; image bytes remain in the separate `companion_images` collection. Editing character text preserves photos. Replacing a portrait removes the previous image, and deleting a character removes all its images.
+
+PNG, JPEG, WebP and GIF uploads are decoded and limited to 10 MB and 20 million pixels. Images are orientation-corrected, resized to at most 2048 pixels per side, and saved as JPEG stills without original EXIF metadata. Photos are displayed in the interface and are not automatically passed to the chat model. Deploy both backend and frontend for photo support; no database migration or new dependency is required.

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, Form
+from fastapi.concurrency import run_in_threadpool
+from functools import partial
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel, Field
 from src.api.utils.sse import sse
 from src.api.deps import auth_service, companion_service, companion_gate, companion_chat
@@ -74,3 +76,20 @@ def chat(profile_id: str, req: MessageRequest):
             else:
                 yield frame
     return StreamingResponse(persisted_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+@router.post("/profiles/{profile_id}/images", dependencies=[Depends(require_world)])
+async def upload_image(profile_id: str, file: UploadFile, role: str = Form(default="gallery")):
+    try:
+        raw = await file.read(10 * 1024 * 1024 + 1)
+        return await run_in_threadpool(partial(companion_service.upload_image, profile_id, raw, file.filename, role))
+    finally:
+        await file.close()
+
+@router.get("/profiles/{profile_id}/images/{image_id}", dependencies=[Depends(require_world)])
+def image_content(profile_id: str, image_id: str):
+    item = companion_service.image(profile_id, image_id)
+    return Response(bytes(item["data"]), media_type=item["mime"], headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
+@router.delete("/profiles/{profile_id}/images/{image_id}", dependencies=[Depends(require_world)])
+def remove_image(profile_id: str, image_id: str):
+    return companion_service.delete_image(profile_id, image_id)

@@ -8,20 +8,37 @@ class CompanionRepository:
         db = get_db()
         self.profiles = db["companion_profiles"]
         self.threads = db["companion_threads"]
+        self.images = db["companion_images"]
+        self.images.create_index([("owner", 1), ("profile_id", 1)])
         self.profiles.create_index("owner")
         self.threads.create_index([("owner", 1), ("profile_id", 1)])
     def list(self):
-        return list(self.profiles.find({"owner": self.owner}, {"_id": 0, "owner": 0}).sort("updated_at", -1))
+        return [self.with_images(p) for p in self.profiles.find({"owner": self.owner}, {"_id": 0, "owner": 0}).sort("updated_at", -1)]
     def get(self, profile_id):
-        return self.profiles.find_one({"owner": self.owner, "id": profile_id}, {"_id": 0, "owner": 0})
+        profile = self.profiles.find_one({"owner": self.owner, "id": profile_id}, {"_id": 0, "owner": 0})
+        return self.with_images(profile) if profile else None
     def save(self, attributes, description, profile_id=None):
         profile_id = profile_id or str(uuid.uuid4())
         profile = {"id": profile_id, "attributes": attributes, "description": description, "updated_at": datetime.now(timezone.utc).isoformat()}
         self.profiles.update_one({"_id": profile_id, "owner": self.owner}, {"$set": {**profile, "owner": self.owner}}, upsert=True)
+        return self.with_images(profile)
+    def with_images(self, profile):
+        images = list(self.images.find({"owner": self.owner, "profile_id": profile["id"]}, {"_id": 0, "owner": 0, "profile_id": 0, "data": 0}).sort("created_at", 1))
+        profile["profile_picture"] = next((image for image in images if image["role"] == "profile"), None)
+        profile["photos"] = [image for image in images if image["role"] == "gallery"]
         return profile
+    def image(self, profile_id, image_id):
+        return self.images.find_one({"owner": self.owner, "profile_id": profile_id, "id": image_id})
+    def add_image(self, item):
+        self.images.insert_one({**item, "owner": self.owner})
+        if item["role"] == "profile":
+            self.images.delete_many({"owner": self.owner, "profile_id": item["profile_id"], "role": "profile", "id": {"$ne": item["id"]}})
+    def delete_image(self, profile_id, image_id):
+        return self.images.delete_one({"owner": self.owner, "profile_id": profile_id, "id": image_id}).deleted_count
     def delete(self, profile_id):
         self.profiles.delete_one({"owner": self.owner, "id": profile_id})
         self.threads.delete_many({"owner": self.owner, "profile_id": profile_id})
+        self.images.delete_many({"owner": self.owner, "profile_id": profile_id})
     def new_thread(self, profile_id):
         session_id = str(uuid.uuid4())
         self.threads.insert_one({"_id": session_id, "id": session_id, "owner": self.owner, "profile_id": profile_id, "turns": [], "context_messages": [], "updated_at": datetime.now(timezone.utc).isoformat()})

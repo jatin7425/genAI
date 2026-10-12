@@ -104,6 +104,46 @@ class CompanionTest(unittest.TestCase):
         self.assertFalse(any(m.get('tool_calls') for m in saved['context_messages']))
         self.assertEqual(saved['context_messages'][-1]['content'], 'Which day?')
 
+    def image_bytes(self, color='red'):
+        import io
+        from PIL import Image
+        output = io.BytesIO(); Image.new('RGB', (40, 60), color).save(output, format='PNG')
+        return output.getvalue()
+    def test_images_persist_replace_isolate_and_clean_up(self):
+        profile = self.service.save(self.attributes(), 'Adult character.')
+        profile_id = profile['id']
+        first = self.service.upload_image(profile_id, self.image_bytes(), 'portrait.png', 'profile')
+        first_id = first['profile_picture']['id']
+        self.assertNotIn('data', first['profile_picture'])
+        second = self.service.upload_image(profile_id, self.image_bytes('blue'), 'replacement.png', 'profile')
+        self.assertNotEqual(first_id, second['profile_picture']['id'])
+        self.assertIsNone(self.repo.image(profile_id, first_id))
+        photo = self.service.upload_image(profile_id, self.image_bytes(), 'gallery.png', 'gallery')['photos'][0]
+        item = self.service.image(profile_id, photo['id'])
+        self.assertEqual(item['mime'], 'image/jpeg'); self.assertTrue(item['data'].startswith(b'\xff\xd8'))
+        self.assertEqual((item['width'], item['height']), (40, 60))
+        edited = self.service.save({**self.attributes(), 'name': 'Riya'}, 'Updated.', profile_id)
+        self.assertEqual(edited['photos'][0]['id'], photo['id'])
+        restored = CompanionService(self.repo_class('user-a'), self.client).get(profile_id)
+        self.assertEqual(restored['profile_picture']['id'], second['profile_picture']['id'])
+        other = self.service.save(self.attributes(), 'Other character.')
+        with self.assertRaises(Exception): self.service.image(other['id'], photo['id'])
+        self.assertIsNone(self.repo_class('user-b').image(profile_id, photo['id']))
+        self.service.delete_image(profile_id, photo['id'])
+        self.assertEqual(self.service.get(profile_id)['photos'], [])
+        self.repo.delete(profile_id)
+        self.assertEqual(self.db.companion_images.count_documents({'profile_id': profile_id}), 0)
+        self.assertEqual(self.db.chat_attachments.count_documents({}), 0)
+    def test_images_validate_contents_size_and_gallery_limit(self):
+        profile_id = self.service.save(self.attributes(), 'Adult character.')['id']
+        for raw, role in [(b'', 'gallery'), (b'not an image', 'profile'), (b'<svg/>', 'gallery'), (self.image_bytes(), 'other'), (b'x' * (10 * 1024 * 1024 + 1), 'gallery')]:
+            with self.assertRaises(Exception): self.service.upload_image(profile_id, raw, 'image.png', role)
+        self.assertEqual(self.service.get(profile_id)['photos'], [])
+        for index in range(20): self.service.upload_image(profile_id, self.image_bytes(), str(index)+'.png', 'gallery')
+        with self.assertRaises(Exception): self.service.upload_image(profile_id, self.image_bytes(), 'extra.png', 'gallery')
+        self.assertEqual(len(self.service.get(profile_id)['photos']), 20)
+        self.service.upload_image(profile_id, self.image_bytes(), 'portrait.png', 'profile')
+
     def test_routes_cannot_be_opened_without_both_gates_and_reject_wrong_profile_thread(self):
         from fastapi import FastAPI, Header, HTTPException
         from fastapi.testclient import TestClient
@@ -130,7 +170,19 @@ class CompanionTest(unittest.TestCase):
         foreign_thread = self.repo.new_thread('other-profile')
         self.assertEqual(client.post(f'/roleplay/profiles/{profile_id}/chat', headers=headers, json={'session_id': foreign_thread, 'message': 'Hello', 'model': 'selected'}).status_code, 404)
         self.assertEqual(client.put(f'/roleplay/profiles/{profile_id}', headers=headers, json={'attributes': {**self.attributes(), 'age': '16'}, 'description': 'Details'}).status_code, 400)
+        images_path = f'/roleplay/profiles/{profile_id}/images'
+        self.assertEqual(client.post(images_path, headers={'Authorization': 'Bearer auth-a'}, files={'file': ('photo.png', self.image_bytes(), 'image/png')}, data={'role': 'profile'}).status_code, 403)
+        uploaded = client.post(images_path, headers=headers, files={'file': ('photo.png', self.image_bytes(), 'image/png')}, data={'role': 'profile'})
+        self.assertEqual(uploaded.status_code, 200)
+        photo_id = uploaded.json()['profile_picture']['id']
+        photo_path = images_path + '/' + photo_id
+        response = client.get(photo_path, headers=headers)
+        self.assertEqual(response.status_code, 200); self.assertEqual(response.headers['content-type'], 'image/jpeg')
+        self.assertEqual(client.get(photo_path).status_code, 401)
+        self.assertEqual(client.delete(images_path + '/missing', headers=headers).status_code, 404)
         client.post('/roleplay/lock', headers=headers)
         self.assertEqual(client.get('/roleplay/profiles', headers=headers).status_code, 403)
+        self.assertEqual(client.get(photo_path, headers=headers).status_code, 403)
+        self.assertEqual(client.delete(photo_path, headers=headers).status_code, 403)
 
 if __name__ == '__main__': unittest.main()

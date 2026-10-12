@@ -56,7 +56,9 @@ def normalize_attributes(attributes):
     return cleaned
 
 class CompanionService:
-    def __init__(self, repository, client): self.repository, self.client = repository, client
+    def __init__(self, repository, client):
+        self.repository, self.client = repository, client
+        self.image_lock = threading.Lock()
     def missing(self, attributes): return [key for key in REQUIRED if not attributes.get(key, "").strip()]
     def get(self, profile_id):
         profile = self.repository.get(profile_id)
@@ -85,6 +87,46 @@ class CompanionService:
         if missing: raise HTTPException(400, "Please fill in: " + ", ".join(missing))
         if profile_id: self.get(profile_id)
         return self.repository.save(attributes, description, profile_id)
+    def upload_image(self, profile_id, raw, filename, role):
+        import io
+        import warnings
+        from uuid import uuid4
+        from datetime import datetime, timezone
+        from PIL import Image, ImageOps, UnidentifiedImageError
+        self.get(profile_id)
+        if role not in {"profile", "gallery"}: raise HTTPException(400, "Choose profile or gallery.")
+        if not raw: raise HTTPException(400, "The image is empty.")
+        if len(raw) > 10 * 1024 * 1024: raise HTTPException(413, "Images must be 10 MB or smaller.")
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(io.BytesIO(raw)) as source:
+                    if source.format not in {"PNG", "JPEG", "WEBP", "GIF"}: raise HTTPException(415, "Use a PNG, JPEG, WebP, or GIF image.")
+                    if source.width * source.height > 20_000_000: raise HTTPException(400, "Images must contain fewer than 20 million pixels.")
+                    image = ImageOps.exif_transpose(source).convert("RGB")
+                    image.thumbnail((2048, 2048))
+                    output = io.BytesIO()
+                    image.save(output, format="JPEG", quality=85)
+                    width, height = image.size
+        except HTTPException: raise
+        except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombWarning, Image.DecompressionBombError) as error:
+            raise HTTPException(400, "This image could not be read. Use a PNG, JPEG, WebP, or GIF image.") from error
+        item = {"id": str(uuid4()), "profile_id": profile_id, "role": role, "name": (filename or "photo").replace("\\", "/").split("/")[-1][:180], "mime": "image/jpeg", "data": output.getvalue(), "width": width, "height": height, "created_at": datetime.now(timezone.utc).isoformat()}
+        with self.image_lock:
+            profile = self.get(profile_id)
+            if role == "gallery" and len(profile["photos"]) >= 20: raise HTTPException(400, "Keep up to 20 gallery photos. Remove one before adding another.")
+            self.repository.add_image(item)
+            return self.get(profile_id)
+    def image(self, profile_id, image_id):
+        self.get(profile_id)
+        item = self.repository.image(profile_id, image_id)
+        if not item: raise HTTPException(404, "Photo not found.")
+        return item
+    def delete_image(self, profile_id, image_id):
+        with self.image_lock:
+            self.image(profile_id, image_id)
+            self.repository.delete_image(profile_id, image_id)
+            return self.get(profile_id)
     def get_prompt(self, profile_id):
         profile = self.get(profile_id); attrs = profile["attributes"]
         required = {k: attrs[k] for k in REQUIRED}
