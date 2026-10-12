@@ -22,4 +22,7 @@ api_router.include_router(attachments_router, tags=["Attachments"], dependencies
 
 api_router.include_router(memory_router, tags=["Memory"], dependencies=[Depends(auth_service.require_auth)])
 
+from src.api.endpoint.companion import router as companion_router
+api_router.include_router(companion_router, tags=["Companions"])
+
 __all__ = ["api_router"]

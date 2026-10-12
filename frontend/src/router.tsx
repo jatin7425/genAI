@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 const LoginScreen = lazy(() => import('./screens/LoginScreen').then(module => ({ default: module.LoginScreen })))
 const NewChatScreen = lazy(() => import('./screens/NewChatScreen').then(module => ({ default: module.NewChatScreen })))
 const ChatConversationScreen = lazy(() => import('./screens/ChatConversationScreen').then(module => ({ default: module.ChatConversationScreen })))
+const CompanionScreen = lazy(() => import('./screens/CompanionScreen').then(module => ({ default: module.CompanionScreen })))
 const SettingScreen = lazy(() => import('./screens/SettingScreen').then(module => ({ default: module.SettingScreen })))
 import { ChatLayout } from './layouts/ChatLayout'
 import { useAuth } from './hooks/useAuth'
@@ -35,6 +36,8 @@ const router = createBrowserRouter([
 
   // Guest-only: login
   { path: '/login', element: <GuestRoute /> },
+
+  { path: '/secret-world', element: <CompanionScreen /> },
 
   // Protected: all app screens nested under ChatLayout (which renders <Outlet />)
   {

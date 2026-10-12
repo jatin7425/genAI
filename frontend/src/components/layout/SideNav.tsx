@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { Icon } from '../Icon'
 import type { StoredConversation } from '../../hooks/useConversationHistory'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
+import { WorldUnlockModal } from '../companion/WorldUnlockModal'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 
 type SideNavProps = {
@@ -22,11 +23,14 @@ type SideNavProps = {
 }
 
 export function SideNav({ forceVisible = false, onClose, conversations = [], hasMoreConversations = false, isLoadingMoreConversations = false, onLoadMoreConversations, activeSessionId, streamingSessionIds, onOpenConversation, onDeleteConversation, onNewChat, onLogout, onSettings }: SideNavProps) {
+  const navigate = useNavigate()
+  const [worldOpen, setWorldOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [pendingDelete, setPendingDelete] = useState<StoredConversation | null>(null)
   const filtered = useMemo(() => conversations.filter(item => item.title.toLowerCase().includes(search.toLowerCase())), [conversations, search])
   const target = useInfiniteScroll(() => onLoadMoreConversations?.(), hasMoreConversations, isLoadingMoreConversations)
   return <>
+    {worldOpen && <WorldUnlockModal onClose={() => { setWorldOpen(false); setSearch('') }} onUnlocked={() => { setWorldOpen(false); setSearch(''); onClose?.(); navigate('/secret-world') }} />}
     {pendingDelete && <ConfirmDialog title="Delete conversation?" description={`"${pendingDelete.title}" and its attachments will be permanently deleted.`} confirmLabel="Delete" onCancel={() => setPendingDelete(null)} onConfirm={() => { onDeleteConversation?.(pendingDelete.sessionId); setPendingDelete(null) }} />}
     <aside className={`${forceVisible ? 'flex' : 'hidden md:flex fixed left-0 top-0'} workspace-sidebar z-20 h-full flex-col bg-surface-container-low border-r border-outline-variant p-4`}>
       <div className="sidebar-brand flex items-center gap-3">
@@ -35,7 +39,7 @@ export function SideNav({ forceVisible = false, onClose, conversations = [], has
         {forceVisible && <button onClick={onClose} aria-label="Close navigation" className="ml-auto p-1"><Icon name="close" className="text-[18px]" /></button>}
       </div>
       <NavLink to="/chat" end onClick={() => { onNewChat?.(); onClose?.() }} className="sidebar-new mb-5 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"><Icon name="add" className="text-[20px]" />New conversation</NavLink>
-      <div className="flex gap-2 items-center rounded-xl border border-outline-variant px-3 py-3 mb-5 bg-background/50"><Icon name="search" className="text-[16px] text-on-surface-variant" /><input aria-label="Search conversations" placeholder="Search conversations…" value={search} onChange={event => setSearch(event.target.value)} className="bg-transparent w-full min-w-0 outline-none text-xs" /></div>
+      <div className="flex gap-2 items-center rounded-xl border border-outline-variant px-3 py-3 mb-5 bg-background/50"><Icon name="search" className="text-[16px] text-on-surface-variant" /><input aria-label="Search conversations" placeholder="Search conversations…" value={search} onChange={event => { const value = event.target.value; if (['open the secret world of releplay', 'open the secret world of roleplay'].includes(value.trim().toLowerCase())) { setWorldOpen(true); setSearch('') } else setSearch(value) }} className="bg-transparent w-full min-w-0 outline-none text-xs" /></div>
       <nav aria-label="Conversations" className="flex-1 min-h-0 overflow-y-auto">
         <p className="text-[11px] font-semibold text-on-surface-variant/70 tracking-wider uppercase px-3 mb-2">Recent conversations</p>
         {!filtered.length && <div className="px-3 py-8 text-xs text-on-surface-variant"><p className="font-medium mb-2">{search ? 'No matching conversations' : 'A fresh start'}</p><p>{search ? 'Try a different search.' : 'Your conversations will appear here.'}</p></div>}

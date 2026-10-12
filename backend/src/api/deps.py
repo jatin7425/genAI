@@ -36,3 +36,9 @@ chat_service = ChatService(agent, persona_service, event_broadcaster, conversati
 auth_service = AuthService(os.getenv("AUTH_USERNAME"), os.getenv("AUTH_PASSWORD_HASH"))
 model_service = ModelService(llm_client)
 suggestion_service = SuggestionService(llm_client)
+
+from src.api.repositories.mongo.companion_repository import CompanionRepository
+from src.api.view.companion_view import CompanionGate, CompanionService, CompanionChatService
+companion_gate = CompanionGate(os.getenv("ROLEPLAY_PASSWORD_HASH"))
+companion_service = CompanionService(CompanionRepository(os.getenv("AUTH_USERNAME") or "operator"), llm_client)
+companion_chat = CompanionChatService(orchestrator(), companion_service, EventBroadcaster(), memory_service)
