@@ -134,6 +134,22 @@ class CompanionTest(unittest.TestCase):
         self.repo.delete(profile_id)
         self.assertEqual(self.db.companion_images.count_documents({'profile_id': profile_id}), 0)
         self.assertEqual(self.db.chat_attachments.count_documents({}), 0)
+    def test_chat_background_is_saved_isolated_and_cleared_when_photo_removed(self):
+        profile_id = self.service.save(self.attributes(), 'Adult character.')['id']
+        first = self.service.upload_image(profile_id, self.image_bytes(), 'portrait.png', 'profile')['profile_picture']['id']
+        second = self.service.upload_image(profile_id, self.image_bytes(), 'gallery.png', 'gallery')['photos'][0]['id']
+        self.assertEqual(self.service.set_background(profile_id, second)['chat_background_id'], second)
+        restored = CompanionService(self.repo_class('user-a'), self.client)
+        self.assertEqual(restored.get(profile_id)['chat_background_id'], second)
+        self.assertEqual(self.service.save(self.attributes(), 'Edited character.', profile_id)['chat_background_id'], second)
+        other_id = self.service.save(self.attributes(), 'Other character.')['id']
+        with self.assertRaises(Exception): self.service.set_background(other_id, second)
+        self.assertEqual(self.service.set_background(profile_id, None)['chat_background_id'], None)
+        self.service.set_background(profile_id, second)
+        self.assertIsNone(self.service.delete_image(profile_id, second)['chat_background_id'])
+        self.service.set_background(profile_id, first)
+        self.assertIsNone(self.service.upload_image(profile_id, self.image_bytes(), 'new.png', 'profile')['chat_background_id'])
+
     def test_images_validate_contents_size_and_gallery_limit(self):
         profile_id = self.service.save(self.attributes(), 'Adult character.')['id']
         for raw, role in [(b'', 'gallery'), (b'not an image', 'profile'), (b'<svg/>', 'gallery'), (self.image_bytes(), 'other'), (b'x' * (10 * 1024 * 1024 + 1), 'gallery')]:
@@ -180,9 +196,13 @@ class CompanionTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200); self.assertEqual(response.headers['content-type'], 'image/jpeg')
         self.assertEqual(client.get(photo_path).status_code, 401)
         self.assertEqual(client.delete(images_path + '/missing', headers=headers).status_code, 404)
+        background_path = f'/roleplay/profiles/{profile_id}/background'
+        self.assertEqual(client.put(background_path, headers=headers, json={'image_id': photo_id}).json()['chat_background_id'], photo_id)
+        self.assertEqual(client.put(background_path, headers=headers, json={'image_id': 'missing'}).status_code, 404)
         client.post('/roleplay/lock', headers=headers)
         self.assertEqual(client.get('/roleplay/profiles', headers=headers).status_code, 403)
         self.assertEqual(client.get(photo_path, headers=headers).status_code, 403)
         self.assertEqual(client.delete(photo_path, headers=headers).status_code, 403)
+        self.assertEqual(client.put(background_path, headers=headers, json={'image_id': None}).status_code, 403)
 
 if __name__ == '__main__': unittest.main()

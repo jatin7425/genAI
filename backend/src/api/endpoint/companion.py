@@ -16,6 +16,8 @@ class ExtractRequest(BaseModel):
 class ProfileRequest(BaseModel):
     attributes: dict[str, str]
     description: str = Field(min_length=1, max_length=20000)
+class BackgroundRequest(BaseModel):
+    image_id: str | None = Field(default=None, min_length=1, max_length=100)
 class MessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
     model: str = Field(min_length=1, max_length=150)
@@ -93,3 +95,7 @@ def image_content(profile_id: str, image_id: str):
 @router.delete("/profiles/{profile_id}/images/{image_id}", dependencies=[Depends(require_world)])
 def remove_image(profile_id: str, image_id: str):
     return companion_service.delete_image(profile_id, image_id)
+
+@router.put("/profiles/{profile_id}/background", dependencies=[Depends(require_world)])
+def set_background(profile_id: str, req: BackgroundRequest):
+    return companion_service.set_background(profile_id, req.image_id)

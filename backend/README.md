@@ -104,3 +104,10 @@ Each character has one replaceable profile picture and up to 20 gallery photos. 
 `POST /V1/roleplay/profiles/{id}/images` accepts multipart `file` and `role` (`profile` or `gallery`). `GET /profiles/{id}/images/{image_id}` serves authenticated image bytes, and `DELETE` on the same path removes that image. All three require both authentication and the secret-world grant. Metadata is returned with profiles as `profile_picture` and `photos`; image bytes remain in the separate `companion_images` collection. Editing character text preserves photos. Replacing a portrait removes the previous image, and deleting a character removes all its images.
 
 PNG, JPEG, WebP and GIF uploads are decoded and limited to 10 MB and 20 million pixels. Images are orientation-corrected, resized to at most 2048 pixels per side, and saved as JPEG stills without original EXIF metadata. Photos are displayed in the interface and are not automatically passed to the chat model. Deploy both backend and frontend for photo support; no database migration or new dependency is required.
+
+
+### Companion chat appearance
+
+The companion gallery keeps two portrait cards per row and supports local character search. Individual chats fill the viewport, with conversation history and settings in on-demand drawers. Chat settings retain model switching, character editing, deletion, and locking; native browser fullscreen is available where supported.
+
+In Photos, select **Use as chat background** on any uploaded profile picture or gallery photo. The authenticated `PUT /V1/roleplay/profiles/{id}/background` endpoint accepts `{"image_id": "photo-id"}` or `{"image_id": null}` to reset. The choice is stored per character as `chat_background_id` and survives reloads and text edits. Only photos belonging to that character can be selected. Removing the selected image, or replacing a portrait selected as the background, restores the default background. Both frontend and backend must be redeployed for this update.

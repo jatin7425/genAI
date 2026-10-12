@@ -21,19 +21,25 @@ class CompanionRepository:
         profile_id = profile_id or str(uuid.uuid4())
         profile = {"id": profile_id, "attributes": attributes, "description": description, "updated_at": datetime.now(timezone.utc).isoformat()}
         self.profiles.update_one({"_id": profile_id, "owner": self.owner}, {"$set": {**profile, "owner": self.owner}}, upsert=True)
-        return self.with_images(profile)
+        return self.get(profile_id)
     def with_images(self, profile):
         images = list(self.images.find({"owner": self.owner, "profile_id": profile["id"]}, {"_id": 0, "owner": 0, "profile_id": 0, "data": 0}).sort("created_at", 1))
         profile["profile_picture"] = next((image for image in images if image["role"] == "profile"), None)
         profile["photos"] = [image for image in images if image["role"] == "gallery"]
+        if profile.get("chat_background_id") not in {image["id"] for image in images}: profile["chat_background_id"] = None
         return profile
+    def set_background(self, profile_id, image_id):
+        self.profiles.update_one({"owner": self.owner, "id": profile_id}, {"$set": {"chat_background_id": image_id}})
     def image(self, profile_id, image_id):
         return self.images.find_one({"owner": self.owner, "profile_id": profile_id, "id": image_id})
     def add_image(self, item):
+        previous = list(self.images.find({"owner": self.owner, "profile_id": item["profile_id"], "role": "profile"}, {"id": 1})) if item["role"] == "profile" else []
         self.images.insert_one({**item, "owner": self.owner})
         if item["role"] == "profile":
+            self.profiles.update_one({"owner": self.owner, "id": item["profile_id"], "chat_background_id": {"$in": [image["id"] for image in previous]}}, {"$unset": {"chat_background_id": ""}})
             self.images.delete_many({"owner": self.owner, "profile_id": item["profile_id"], "role": "profile", "id": {"$ne": item["id"]}})
     def delete_image(self, profile_id, image_id):
+        self.profiles.update_one({"owner": self.owner, "id": profile_id, "chat_background_id": image_id}, {"$unset": {"chat_background_id": ""}})
         return self.images.delete_one({"owner": self.owner, "profile_id": profile_id, "id": image_id}).deleted_count
     def delete(self, profile_id):
         self.profiles.delete_one({"owner": self.owner, "id": profile_id})

@@ -127,6 +127,12 @@ class CompanionService:
             self.image(profile_id, image_id)
             self.repository.delete_image(profile_id, image_id)
             return self.get(profile_id)
+    def set_background(self, profile_id, image_id):
+        with self.image_lock:
+            self.get(profile_id)
+            if image_id is not None: self.image(profile_id, image_id)
+            self.repository.set_background(profile_id, image_id)
+            return self.get(profile_id)
     def get_prompt(self, profile_id):
         profile = self.get(profile_id); attrs = profile["attributes"]
         required = {k: attrs[k] for k in REQUIRED}

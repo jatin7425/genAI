@@ -3,7 +3,7 @@ import { authFetch } from './http'
 import { readSseStream } from './sse'
 import type { ChatStreamHandlers } from './types'
 export type CompanionPhoto = { id: string; name: string; role: 'profile' | 'gallery'; width: number; height: number }
-export type Companion = { id: string; attributes: Record<string, string>; description: string; updated_at: string; profile_picture?: CompanionPhoto | null; photos?: CompanionPhoto[] }
+export type Companion = { id: string; attributes: Record<string, string>; description: string; updated_at: string; profile_picture?: CompanionPhoto | null; photos?: CompanionPhoto[]; chat_background_id?: string | null }
 export type CompanionTurn = { id: string; kind: 'user' | 'agent'; text: string; status?: string }
 export type CompanionThread = { id: string; profile_id: string; turns: CompanionTurn[]; updated_at: string }
 const TOKEN_KEY = 'cortex.secretWorld'
@@ -62,4 +62,8 @@ export async function removeCompanionPhoto(profileId: string, imageId: string): 
 }
 export async function companionPhotoBlob(profileId: string, imageId: string, signal: AbortSignal): Promise<Blob> {
   return (await request(`/profiles/${encodeURIComponent(profileId)}/images/${encodeURIComponent(imageId)}`, { signal })).blob()
+}
+
+export async function setCompanionBackground(profileId: string, imageId: string | null): Promise<Companion> {
+  return (await request(`/profiles/${encodeURIComponent(profileId)}/background`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_id: imageId }) })).json()
 }
