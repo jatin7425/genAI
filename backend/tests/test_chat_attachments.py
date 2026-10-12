@@ -119,7 +119,7 @@ class AttachmentsTest(unittest.TestCase):
         self.assertIn('250', str(agent.calls[-1][1]))
         _, stream = chat.handle_message('same-chat', 'New question', 'Default', 'gemini-3.5-flash', retry=True); list(stream)
         self.assertNotIn('What was the budget?', str(agent.calls[-1][1]))
-        history = types.SimpleNamespace(get_messages=lambda *_args, **_kwargs: {'items':[{'kind':'user','text':'Read budget','attachments':[meta]}]})
+        history = types.SimpleNamespace(get_session_memory=lambda *_args, **_kwargs: {'items':[{'kind':'user','text':'Read budget','attachments':[meta]}]})
         resumed = ChatService(agent, personas, broadcaster, history, self.service)
         _, stream = resumed.handle_message('same-chat', 'Follow up', 'Default', 'gemini-3.5-flash'); list(stream)
         self.assertIn('Attachment fact', str(agent.calls[-1][1]))

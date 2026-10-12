@@ -15,12 +15,20 @@ const browser=await chromium.launch({headless:true,executablePath:process.env.CO
 const context=await browser.newContext({viewport:{width:1440,height:1000}});
 const errors=[];let chatRequests=[];let uploadCounter=0;const uploaded=new Map();
 const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSAAAAABJRU5ErkJggg==','base64');
+const personaPrompts=new Map([['Default Assistant','Be helpful.'],['Research partner','Help with research.']]);const memoryEntries=new Map();
 const conversations=[{session_id:'test-session',persona:'Default Assistant',model:'gemini-3.5-flash',title:'Planning a research project',updated_at:new Date().toISOString(),turns:[]}];
 await context.route('**/V1/**',async route=>{
  const req=route.request(),url=new URL(req.url()),path=url.pathname;
  let body={};
  if(path==='/V1/models') body={models:['gemini-3.5-flash','nvidia/nemotron-3-super-120b-a12b']};
  else if(path==='/V1/personas') body={personas:['Default Assistant','Research partner']};
+ else if(path.startsWith('/V1/personas/')) {
+  const name=decodeURIComponent(path.split('/').at(-1));
+  if(req.method()==='PUT') personaPrompts.set(name,req.postDataJSON().prompt);
+  body={name,prompt:personaPrompts.get(name)};
+ }
+ else if(path==='/V1/memory') { if(req.method()==='DELETE')memoryEntries.clear();body={entries:[...memoryEntries].map(([key,value])=>({key,value}))}; }
+ else if(path.startsWith('/V1/memory/')) { const key=decodeURIComponent(path.split('/').at(-1));if(req.method()==='PUT')memoryEntries.set(key,req.postDataJSON().value);if(req.method()==='DELETE')memoryEntries.delete(key); }
  else if(path==='/V1/suggestions') body={suggestions:[{icon:'travel_explore',title:'Explore an idea',description:'Research a topic and turn what you find into clear insights.'},{icon:'code',title:'Build something',description:'Work through a coding problem, one step at a time.'},{icon:'lightbulb',title:'Make a plan',description:'Bring structure to your next project or big decision.'}]};
  else if(path==='/V1/conversations/stream') return route.fulfill({status:200,contentType:'text/event-stream',body:': heartbeat\n\n'});
  else if(path.startsWith('/V1/conversations/') && req.method()==='PUT') { const data=req.postDataJSON();const id=path.split('/').at(-1);const old=conversations.find(c=>c.session_id===id);if(old)Object.assign(old,data);else conversations.push({session_id:id,persona:data.persona,model:data.model,title:data.turns[0]?.text || 'New conversation',turns:data.turns,updated_at:new Date().toISOString()}); }
@@ -56,8 +64,17 @@ try{
  await page.getByLabel('Search conversations').fill('no match');await page.getByText('No matching conversations').waitFor();await page.getByLabel('Search conversations').fill('');
  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByText('Your workspace, your way.').waitFor();await page.getByRole('button',{name:'Dark',exact:true}).click();assert(await page.evaluate(()=>document.documentElement.classList.contains('dark')));await page.reload();await page.getByText('Your workspace, your way.').waitFor();assert(await page.evaluate(()=>document.documentElement.classList.contains('dark')));await page.screenshot({path:root+'/cortex-settings-dark.png'});await page.getByRole('button',{name:'Light',exact:true}).click();
  await page.getByRole('button',{name:'New Persona'}).click();await page.getByRole('dialog',{name:'Create persona'}).waitFor();await page.getByLabel('IDENTITY',{exact:true}).fill('Analyst');await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);
+ await page.getByRole('button',{name:'Edit Research partner',exact:true}).click();await page.getByRole('dialog',{name:'Edit persona'}).waitFor();
+ assert.equal(await page.getByLabel('SYSTEM PROMPT (BEHAVIOR RULES)').inputValue(),'Help with research.');
+ await page.getByLabel('SYSTEM PROMPT (BEHAVIOR RULES)').fill('Provide concise research with sources.');await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await page.getByRole('dialog',{name:'Edit persona'}).waitFor({state:'hidden'});assert.equal(personaPrompts.get('Research partner'),'Provide concise research with sources.');
+ await page.getByRole('button',{name:'Edit Research partner',exact:true}).click();await page.getByRole('dialog',{name:'Edit persona'}).waitFor();await page.waitForFunction(()=>document.querySelector('#persona-prompt').value==='Provide concise research with sources.');await page.keyboard.press('Escape');
+ await page.getByLabel('Memory key',{exact:true}).fill('language');await page.getByLabel('Memory value',{exact:true}).fill('Hindi');await page.getByRole('button',{name:'Add memory',exact:true}).click();await page.getByRole('button',{name:'Edit memory language',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Edit memory language',exact:true}).click();await page.getByLabel('Memory value',{exact:true}).fill('English and Hindi');await page.getByRole('button',{name:'Save memory',exact:true}).click();await page.getByText('English and Hindi',{exact:true}).waitFor();assert.equal(memoryEntries.get('language'),'English and Hindi');
+ await page.getByRole('button',{name:'Clear shared memory',exact:true}).click();await page.getByRole('dialog',{name:'Clear shared memory?'}).waitFor();await page.getByRole('button',{name:'Clear memory',exact:true}).click();await page.getByText('No saved details yet.',{exact:true}).waitFor();assert.equal(memoryEntries.size,0);
  assert.equal(await page.getByRole('button',{name:'Documents',exact:true}).count(),0);
  await page.goto('http://127.0.0.1:4179/chat/test-session');await page.getByText('A clear starting point').waitFor();await noOverflow();await page.screenshot({path:root+'/cortex-conversation.png'});
+ await page.getByRole('button',{name:'Choose persona'}).click();await page.getByRole('button',{name:'Edit current persona',exact:true}).click();await page.getByRole('dialog',{name:'Edit persona'}).waitFor();await page.keyboard.press('Escape');
  await page.getByRole('link',{name:/New conversation/}).click();await page.getByText('Where should we begin?').waitFor();await page.getByLabel('Message Cortex',{exact:true}).fill('Help me research');await page.getByLabel('Message Cortex',{exact:true}).press('Enter');await page.getByText('Here is a thoughtful response.').waitFor();assert.equal(chatRequests.at(-1).message,'Help me research');
  // Files are sent as attachment IDs, retained in history, and preserved on retries.
  await page.getByLabel('Choose attachments',{exact:true}).setInputFiles([{name:'notes.txt',mimeType:'text/plain',buffer:Buffer.from('Sample notes')},{name:'image.png',mimeType:'image/png',buffer:image}]);
@@ -85,5 +102,5 @@ try{
  await page.getByRole('button',{name:'Open navigation'}).click();await page.getByRole('dialog',{name:'Navigation'}).getByRole('link',{name:/New conversation/}).click();assert.equal(await page.getByRole('dialog',{name:'Navigation'}).count(),0);
  await page.setViewportSize({width:320,height:640});await noOverflow();await page.getByLabel('Message Cortex',{exact:true}).fill('Small screen test');assert(await page.getByRole('button',{name:'Send message',exact:true}).isVisible());
  await page.goto('http://127.0.0.1:4179/login');await page.evaluate(()=>localStorage.removeItem('cortex.authToken'));await page.reload();await page.getByText('Welcome back.').waitFor();await noOverflow();
- assert.deepEqual(errors,[]);console.log('PASS: desktop/mobile layouts, login, composer, streamed response, pickers, search, theme persistence, dialogs, attachments, ongoing model switching, provider limits, interrupted streams, conversation rendering; no runtime errors.');
+ assert.deepEqual(errors,[]);console.log('PASS: desktop/mobile layouts, login, composer, streamed response, pickers, search, theme persistence, dialogs, persona edits, shared memory controls, attachments, ongoing model switching, provider limits, interrupted streams, conversation rendering; no runtime errors.');
 }catch(e){ console.log('DEBUG',JSON.stringify(chatRequests),errors,await page.locator('body').innerText());await page.screenshot({path:root+'/cortex-check-failure.png'});throw e;}finally{await browser.close();server.kill()}

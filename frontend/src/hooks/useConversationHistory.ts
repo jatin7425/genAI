@@ -93,6 +93,9 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
               incoming.turns,
             )
           },
+          onTitled: (sessionId, title) => {
+            setConversations(prev => prev.map(c => c.sessionId === sessionId ? { ...c, title } : c))
+          },
           onDeleted: (sessionId) => {
             setConversations((prev) => prev.filter((c) => c.sessionId !== sessionId))
           },

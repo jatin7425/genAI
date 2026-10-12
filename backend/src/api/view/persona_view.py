@@ -15,3 +15,6 @@ class PersonaService:
 
     def delete_persona(self, name):
         self.repository.delete(name)
+
+    def update_persona(self, name, prompt):
+        return self.repository.update(name, prompt)

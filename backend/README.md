@@ -62,3 +62,14 @@ python -m unittest discover -s tests -v
 ```
 
 These checks use fixture repositories and model responses, not paid or live provider requests. Frontend browser checks run with `npm run test:ui` after installing Playwright Chromium.
+
+
+## Personas, titles, and memory
+
+Existing personas can be edited from Settings or the chat persona menu, including the default persona. Names remain stable so saved conversations keep their persona reference. `GET /V1/personas/{name}` loads instructions; `PUT` updates them. Empty instructions are rejected; missing personas return 404. Changes apply on the next turn.
+
+After a first completed question/reply pair is saved, the selected chat model generates a short title in a background worker. A fallback title appears immediately; provider failures do not block chat. Generated titles are retained on later saves and streamed to navigation. Each conversation retains its own persisted history, including older pages, and restores only its own context when resumed.
+
+Shared user memory is persisted in MongoDB's `user_memory` collection as user-scoped key/value entries (unique user/key index). The existing login supports one operator; `AUTH_USERNAME` identifies that operator. The assistant can remember stable user-stated details with `remember_user_detail`, read current details, and forget requested keys. Shared facts are refreshed before each new turn across all sessions/personas. Conversation content and attachment text are not automatically copied to global memory.
+
+Settings provides add/edit/delete/clear controls. Authenticated endpoints: `GET /V1/memory`, `PUT /V1/memory/{key}`, `DELETE /V1/memory/{key}`, and `DELETE /V1/memory`. Values are text, keys are at most 100 characters, values at most 2000 characters, with at most 100 entries per operator. Clearing shared memory does not delete session histories, and deleting a session does not clear shared memory. Redeploy the Python backend and frontend to enable these changes.

@@ -28,8 +28,11 @@ llm_client = llmClient()
 persona_repository = PersonaRepository()
 persona_service = PersonaService(persona_repository)
 conversation_repository = ConversationRepository()
-conversation_service = ConversationService(conversation_repository, event_broadcaster, attachment_repository)
-chat_service = ChatService(agent, persona_service, event_broadcaster, conversation_service, attachment_service)
+from src.api.repositories.mongo.memory_repository import MongoMemoryRepository
+from src.api.view.memory_view import MemoryService
+memory_service = MemoryService(MongoMemoryRepository(), os.getenv("AUTH_USERNAME") or "operator")
+conversation_service = ConversationService(conversation_repository, event_broadcaster, attachment_repository, llm_client)
+chat_service = ChatService(agent, persona_service, event_broadcaster, conversation_service, attachment_service, memory_service)
 auth_service = AuthService(os.getenv("AUTH_USERNAME"), os.getenv("AUTH_PASSWORD_HASH"))
 model_service = ModelService(llm_client)
 suggestion_service = SuggestionService(llm_client)

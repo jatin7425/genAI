@@ -29,3 +29,7 @@ class MongoPersonaRepository:
 
     def delete(self, name):
         self.collection.delete_one({"_id": name})
+
+    def update(self, name, prompt):
+        result = self.collection.update_one({"_id": name}, {"$set": {"prompt": prompt}})
+        return result.matched_count > 0

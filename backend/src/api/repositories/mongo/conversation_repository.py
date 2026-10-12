@@ -55,7 +55,17 @@ class MongoConversationRepository:
         }
 
     def upsert(self, conversation):
-        self.collection.replace_one({"session_id": conversation["session_id"]}, conversation, upsert=True)
+        values = dict(conversation)
+        title = values.pop("title")
+        self.collection.update_one({"session_id": conversation["session_id"]}, {"$set": values, "$setOnInsert": {"title": title}}, upsert=True)
+        return self.collection.find_one({"session_id": conversation["session_id"]}, {"_id": 0})
+
+    def has_generated_title(self, session_id):
+        return self.collection.find_one({"session_id": session_id, "title_generated": True}, {"_id": 1}) is not None
+
+    def set_title(self, session_id, title):
+        result = self.collection.update_one({"session_id": session_id, "title_generated": {"$ne": True}}, {"$set": {"title": title, "title_generated": True}})
+        return result.matched_count > 0
 
     def delete(self, session_id):
         self.collection.delete_one({"session_id": session_id})

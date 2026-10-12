@@ -35,6 +35,7 @@ export function ChatLayout() {
   const [activePersona, setActivePersona] = useState(DEFAULT_PERSONA)
   const [activeModel, setActiveModel] = useState<string | null>(null)
   const [personaModalOpen, setPersonaModalOpen] = useState(false)
+  const [editPersonaName, setEditPersonaName] = useState<string | undefined>()
   const [personaRefreshKey, setPersonaRefreshKey] = useState(0)
 
   const {
@@ -186,7 +187,8 @@ export function ChatLayout() {
               activePersona={effectivePersona}
               refreshKey={personaRefreshKey}
               onSelectPersona={setActivePersona}
-              onCreateNew={() => setPersonaModalOpen(true)}
+              onEdit={(name) => { setEditPersonaName(name); setPersonaModalOpen(true) }}
+              onCreateNew={() => { setEditPersonaName(undefined); setPersonaModalOpen(true) }}
             />
           </div>
         }
@@ -196,7 +198,7 @@ export function ChatLayout() {
 
       {personaModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-stack-md bg-black/60">
-          <CreatePersonaModal
+          <CreatePersonaModal key={editPersonaName ?? "new"} editName={editPersonaName}
             onClose={() => setPersonaModalOpen(false)}
             onCreated={(name) => {
               setPersonaRefreshKey((k) => k + 1)

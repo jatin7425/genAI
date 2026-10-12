@@ -1,33 +1,48 @@
 import { useDialogFocus } from '../../hooks/useDialogFocus'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Icon } from '../Icon'
-import { createPersona } from '../../api/personas'
+import { createPersona, fetchPersona, updatePersona } from '../../api/personas'
 
 type CreatePersonaModalProps = {
+  editName?: string
   onClose?: () => void
   onCreated?: (name: string) => void
 }
 
 const MAX_CONTEXT_TOKENS = 128_000
 
-export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalProps) {
-  const [name, setName] = useState('')
+export function CreatePersonaModal({ editName, onClose, onCreated }: CreatePersonaModalProps) {
+  const [name, setName] = useState(editName ?? '')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [loading, setLoading] = useState(!!editName)
+  const [loadFailed, setLoadFailed] = useState(false)
+  useEffect(() => {
+    if (!editName) return
+    let cancelled = false
+    fetchPersona(editName).then(persona => {
+      if (!cancelled) setSystemPrompt(persona.prompt)
+    }).catch(err => {
+      if (!cancelled) { setError(err instanceof Error ? err.message : 'Failed to load persona'); setLoadFailed(true) }
+    }).finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [editName])
 
   // rough estimate matching the design's "120 tokens" placeholder scale
   const estimatedTokens = Math.round(systemPrompt.length / 4)
   const usagePercent = Math.min(100, (estimatedTokens / MAX_CONTEXT_TOKENS) * 100)
 
-  const canSubmit = name.trim().length > 0 && systemPrompt.trim().length > 0 && !submitting
+  const canSubmit = name.trim().length > 0 && systemPrompt.trim().length > 0 && !submitting && !loading && !loadFailed
 
   const handleSubmit = async () => {
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
     try {
-      await createPersona(name.trim(), systemPrompt.trim())
+      if (editName) await updatePersona(editName, systemPrompt.trim())
+      else await createPersona(name.trim(), systemPrompt.trim())
       onCreated?.(name.trim())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create persona')
@@ -38,21 +53,22 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
 
   const dialogRef = useDialogFocus(true, () => { if (!submitting) onClose?.() })
   return (
-    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Create persona" className="bg-surface border border-outline-variant rounded-2xl shadow-[0_20px_80px_rgba(20,40,25,0.18)] backdrop-blur-md max-h-[90dvh] overflow-y-auto w-full max-w-4xl flex flex-col md:flex-row">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={editName ? "Edit persona" : "Create persona"} className="bg-surface border border-outline-variant rounded-2xl shadow-[0_20px_80px_rgba(20,40,25,0.18)] backdrop-blur-md max-h-[90dvh] overflow-y-auto w-full max-w-4xl flex flex-col md:flex-row">
       <div className="flex-1 p-stack-md border-r border-outline-variant flex flex-col gap-stack-sm overflow-y-auto">
         <div className="flex items-center justify-between mb-unit">
-          <h2 className="font-headline-md text-headline-md text-on-surface">Create Persona</h2>
+          <h2 className="font-headline-md text-headline-md text-on-surface">{editName ? "Edit Persona" : "Create Persona"}</h2>
           <button onClick={onClose} disabled={submitting} aria-label="Close persona editor" className="text-on-surface-variant hover:text-on-surface transition-colors">
             <Icon name="close" />
           </button>
         </div>
         <p className="text-on-surface-variant mb-stack-sm">
-          Define the name and system prompt (behavior rules) for a new persona.
+          {editName ? "Update the behavior rules. Changes apply from the next chat message." : "Define the name and system prompt (behavior rules) for a new persona."}
         </p>
 
         <div className="space-y-unit">
           <label htmlFor="persona-name" className="font-label-caps text-label-caps text-on-surface-variant">IDENTITY</label>
           <input id="persona-name"
+            disabled={!!editName}
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full bg-surface-container border border-outline-variant rounded-lg px-3 py-2 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-on-surface-variant/50"
@@ -66,6 +82,7 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
             <span>SYSTEM PROMPT (BEHAVIOR RULES)</span>
           </label>
           <textarea id="persona-prompt"
+            disabled={loading || loadFailed}
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             className="w-full flex-1 min-h-[200px] bg-surface-container border border-outline-variant rounded-lg p-3 text-on-surface font-code-sm text-code-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
@@ -73,7 +90,8 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
           />
         </div>
 
-        {error && <p className="text-error text-sm">{error}</p>}
+        {loading && <p role="status" className="text-on-surface-variant text-sm">Loading persona…</p>}
+        {error && <p role="alert" className="text-error text-sm">{error}</p>}
       </div>
 
       <div className="w-full md:w-[320px] bg-surface-container-low flex flex-col">
@@ -122,7 +140,7 @@ export function CreatePersonaModal({ onClose, onCreated }: CreatePersonaModalPro
             disabled={!canSubmit}
             className="px-4 py-2 font-body-md bg-primary text-on-primary-container rounded-lg hover:bg-primary-container transition-colors shadow-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? 'Creating…' : 'Create persona'}
+            {submitting ? (editName ? 'Saving…' : 'Creating…') : (editName ? 'Save changes' : 'Create persona')}
           </button>
         </div>
       </div>

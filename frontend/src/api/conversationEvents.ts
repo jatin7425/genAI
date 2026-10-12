@@ -5,6 +5,7 @@ import type { ServerConversation } from './conversations'
 
 export type ConversationEventHandlers = {
   onUpserted?: (conversation: ServerConversation) => void
+  onTitled?: (sessionId: string, title: string) => void
   onDeleted?: (sessionId: string) => void
   onChatStarted?: (sessionId: string) => void
   onChatThinking?: (sessionId: string, content: string) => void
@@ -19,6 +20,7 @@ export async function streamConversationEvents(handlers: ConversationEventHandle
   await readSseStream(res, ({ event, data }) => {
     const payload = JSON.parse(data)
     if (event === 'upserted') handlers.onUpserted?.(payload)
+    else if (event === 'titled') handlers.onTitled?.(payload.session_id, payload.title)
     else if (event === 'deleted') handlers.onDeleted?.(payload.session_id)
     else if (event === 'chat_started') handlers.onChatStarted?.(payload.session_id)
     else if (event === 'chat_thinking') handlers.onChatThinking?.(payload.session_id, payload.content)

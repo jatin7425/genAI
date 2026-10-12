@@ -7,11 +7,12 @@ import { PersonaAvatar } from './PersonaAvatar'
 type PersonaSwitcherProps = {
   activePersona: string
   onSelectPersona?: (name: string) => void
+  onEdit?: (name: string) => void
   onCreateNew?: () => void
   refreshKey?: number
 }
 
-export function PersonaSwitcher({ activePersona, onSelectPersona, onCreateNew, refreshKey }: PersonaSwitcherProps) {
+export function PersonaSwitcher({ activePersona, onSelectPersona, onCreateNew, onEdit, refreshKey }: PersonaSwitcherProps) {
   const [open, setOpen] = useState(false)
   const popoverRef = usePopover(open, () => setOpen(false))
   const [personas, setPersonas] = useState<string[]>([])
@@ -85,6 +86,10 @@ export function PersonaSwitcher({ activePersona, onSelectPersona, onCreateNew, r
           })}
 
           <div className="border-t border-outline-variant mt-2 pt-2">
+            <button onClick={() => { onEdit?.(activePersona); setOpen(false) }} className="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high text-left w-full text-on-surface">
+              <Icon name="edit" />
+              <span>Edit current persona</span>
+            </button>
             <button
               onClick={() => {
                 onCreateNew?.()

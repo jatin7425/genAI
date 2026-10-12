@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { GlobalMemory } from '../components/GlobalMemory'
 import { Icon } from '../components/Icon'
 import { fetchPersonas, deletePersona } from '../api/personas'
 import { CreatePersonaModal } from '../components/persona/CreatePersonaModal'
@@ -13,6 +14,7 @@ export function SettingScreen() {
   const [personas, setPersonas] = useState<string[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [editName, setEditName] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -106,6 +108,9 @@ export function SettingScreen() {
                     <p className="truncate text-sm font-medium text-on-surface">{name}</p>
                     {isDefault && <p className="text-xs text-on-surface-variant">Default persona</p>}
                   </div>
+                  <button onClick={() => setEditName(name)} aria-label={`Edit ${name}`} title="Edit persona" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-primary">
+                    <Icon name="edit" className="text-[18px]" />
+                  </button>
                   <button
                     onClick={() => setPendingDelete(name)}
                     disabled={isDefault}
@@ -120,6 +125,7 @@ export function SettingScreen() {
             })}
           </div>
         )}
+        <GlobalMemory />
       </div>
 
       {createOpen && (
@@ -132,6 +138,15 @@ export function SettingScreen() {
               showToast(`Created "${name}".`, 'success')
             }}
           />
+        </div>
+      )}
+
+      {editName && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+          <CreatePersonaModal key={editName} editName={editName} onClose={() => setEditName(null)} onCreated={(name) => {
+            setEditName(null)
+            showToast(`Updated "${name}".`, 'success')
+          }} />
         </div>
       )}
 
