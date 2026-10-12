@@ -12,6 +12,7 @@ from src.utils.web_search import webSearch
 from src.utils.common_tools import CommonTools
 from src.utils.provider_errors import ProviderError
 from src.utils.time_context import with_current_context
+from src.utils.context_manager import ContextManager
 
 class WebSearchAgent:
     def __init__(self, max_iterations=10):
@@ -118,19 +119,20 @@ class WebSearchAgent:
             if on_event:
                 on_event(kind, content)
 
+        context_manager = ContextManager(self.llm_client)
+        context_retry = False
         searched = False
         requested_search = False
-        for _ in range(max_iterations):
+        for iteration in range(max_iterations + 1):
+            if iteration == max_iterations and not context_retry:
+                break
             accumulated_content = ""
             final_tool_calls = None
             in_think_block = False
 
             try:
-                for delta in self.llm_client.call_api_stream("chat", {
-                    "model": model or "nvidia",
-                    "messages": with_current_context(messages),
-                    "tools": tools,
-                }):
+                prepared, output_tokens = context_manager.prepare(with_current_context(messages), tools, model or "nvidia", aggressive=context_retry)
+                for delta in self.llm_client.call_api_stream("chat", {"model": model or "nvidia", "messages": prepared, "tools": tools, "max_tokens": output_tokens}):
                     if delta.get("reasoning_content") and not in_think_block:
                         emit("thinking", "Researching…")
                         in_think_block = True
@@ -142,7 +144,11 @@ class WebSearchAgent:
 
                     if delta.get("accumulated_tool_calls"):
                         final_tool_calls = delta["accumulated_tool_calls"]
-            except ProviderError:
+            except ProviderError as error:
+                if error.issue.get("code") == "context_limit" and not context_retry and not accumulated_content and not final_tool_calls:
+                    context_retry = True
+                    emit("thinking", "Reducing research context to fit this model…")
+                    continue
                 raise
             except Exception:
                 return {"answer": None, "sources": [], "confidence": "low", "note": "The web search response could not be completed. Try again."}

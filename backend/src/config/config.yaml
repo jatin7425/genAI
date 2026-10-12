@@ -8,3 +8,9 @@ API:
 
 flags:
   is_terminal: true
+
+# Conservative request budget when the gateway does not publish a model limit.
+# Set explicit verified limits for your deployed models here if needed.
+context:
+  default_window: 8192
+  model_windows: {}

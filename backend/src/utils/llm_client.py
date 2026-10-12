@@ -23,6 +23,8 @@ class llmClient:
         self.CONFIG: dict[str, Any] = CONFIG
         self.api_config: dict[str, Any] = self.CONFIG.get("API", {})
         self._model_cache: list[str] | None = None
+        self._model_metadata = {}
+        self._context_metadata_checked = False
 
     def available_models(self) -> list[str]:
         if self._model_cache is None:
@@ -208,7 +210,7 @@ class llmClient:
         headers = self.get_headers()
         
         def fetch_url(url: str):
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
             
@@ -229,13 +231,39 @@ class llmClient:
             # Return the first successful response
             for future in as_completed(futures):
                 try:
-                    return future.result()
+                    models = future.result()
+                    for item in models:
+                        if isinstance(item, dict) and item.get("id"):
+                            self._model_metadata[item["id"]] = item
+                    return models
                 except Exception as e:
                     errors.append(f"{futures[future]}: {str(e)}")
                     continue
             
             # All URLs failed
             raise Exception(f"All {len(urls)} URLs failed:\n" + "\n".join(errors))
+
+    def context_window(self, model):
+        config = self.CONFIG.get("context", {})
+        overrides = config.get("model_windows", {}) or {}
+        value = overrides.get(model)
+        if isinstance(value, int) and value >= 2048:
+            return value
+        if not self._context_metadata_checked and model not in self._model_metadata:
+            self._context_metadata_checked = True
+            try:
+                self.list_models()
+            except Exception:
+                pass
+        metadata = self._model_metadata.get(model, {})
+        for source in (metadata, metadata.get("model_info", {})):
+            if not isinstance(source, dict):
+                continue
+            for key in ("context_window", "context_length", "max_input_tokens"):
+                candidate = source.get(key)
+                if isinstance(candidate, int) and candidate >= 2048:
+                    return candidate
+        return config.get("default_window", 8192)
 
     def image_summarizer(
         self,

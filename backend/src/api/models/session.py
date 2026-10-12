@@ -19,3 +19,4 @@ class Session:
         self.result_holder = {}
         self.awaiting_answer = False
         self.pending_context = None
+        self.history_load_failed = False
