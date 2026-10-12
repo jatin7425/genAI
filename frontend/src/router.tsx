@@ -38,6 +38,7 @@ const router = createBrowserRouter([
   { path: '/login', element: <GuestRoute /> },
 
   { path: '/secret-world', element: <CompanionScreen /> },
+  { path: '/secret-world/:companionId', element: <CompanionScreen /> },
 
   // Protected: all app screens nested under ChatLayout (which renders <Outlet />)
   {
