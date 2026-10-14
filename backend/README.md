@@ -85,29 +85,8 @@ Follow-ups automatically retrieve relevant earlier messages (with adjacent repli
 
 `search_current_chat(query, limit, offset)` covers all restored and unsaved messages in the current session, without the old 1000-message cutoff. It returns source roles, message indexes, excerpts, and pagination. `read_current_chat(message_index, offset, length)` reads exact message/tool-result text in bounded pages. These tools cannot select another session. A history-load failure is identified as unavailable history rather than interpreted as evidence the user never said something.
 
+## Retired feature data cleanup
 
-## Secret world / companion studio
+The companion interface, hidden search trigger, routes, password gate, and services have been removed. On startup, the backend drops only the retired `companion_profiles`, `companion_threads`, and `companion_images` collections from its configured MongoDB database. Profiles, private transcripts, uploaded pictures, and background preferences in those collections are permanently deleted. Normal conversations, personas, chat attachments, and shared user memory are preserved. The cleanup is idempotent and a failure stops startup so a failed deletion is not silently reported as successful.
 
-Typing `Open the secret world of releplay` into conversation search opens a password modal (the corrected `roleplay` spelling also works). Unlocking creates a one-hour idle grant bound to the currently authenticated login, held in session storage in that browser tab. The server validates both the normal bearer token and `X-Roleplay-Token` on every private endpoint; direct navigation does not bypass the gate. Five incorrect attempts temporarily block further attempts. The configured password is represented by a backend bcrypt hash; it is never included in the frontend bundle or sent to the model. Optionally set `ROLEPLAY_PASSWORD_HASH` to replace the default hash.
-
-The separate `/secret-world` interface creates fictional adult companions from free-form descriptions. AI extraction uses the selected model and preserves stated fields as editable string KV attributes: name, adult age, personality, relationship, height, body type, appearance, hobbies, background, communication style, and extra details. Missing required fields (name, age, personality, relationship) must be supplied manually; age must be at least 18. Extraction never fills a missing age from appearance. Original descriptions remain stored in full; a profile-reading tool provides details beyond the prompt excerpt. Current edited attributes override older descriptions and conversation text.
-
-Profiles and private transcripts are stored separately in `companion_profiles` and `companion_threads`, scoped to the existing authenticated operator. They are excluded from normal conversations/personas. Private chats use the existing model switching, streaming, context budgeting, current-session retrieval, and shared user-memory services. Character KV fields are separate from shared user facts. Completed chat context is saved on the server, and each conversation can resume after a backend restart. Deleting a companion removes its private threads.
-
-Private API routes under `/V1/roleplay`: `POST /unlock`, `POST /lock`, `POST /extract`, `GET/POST /profiles`, `PUT/DELETE /profiles/{id}`, `GET /profiles/{id}/threads`, `POST /profiles/{id}/chat`. Companion browser regression: `node scripts/companion-smoke.mjs` (from frontend, with Playwright Chromium installed or `CORTEX_CHROMIUM_PATH` set). Backend and frontend redeployment is required.
-
-
-### Character photos
-
-Each character has one replaceable profile picture and up to 20 gallery photos. The Photos panel is available from gallery cards and the chat header, and opens after creating a character. Uploads are saved immediately; previews, replacement and removal do not reset chat history.
-
-`POST /V1/roleplay/profiles/{id}/images` accepts multipart `file` and `role` (`profile` or `gallery`). `GET /profiles/{id}/images/{image_id}` serves authenticated image bytes, and `DELETE` on the same path removes that image. All three require both authentication and the secret-world grant. Metadata is returned with profiles as `profile_picture` and `photos`; image bytes remain in the separate `companion_images` collection. Editing character text preserves photos. Replacing a portrait removes the previous image, and deleting a character removes all its images.
-
-PNG, JPEG, WebP and GIF uploads are decoded and limited to 10 MB and 20 million pixels. Images are orientation-corrected, resized to at most 2048 pixels per side, and saved as JPEG stills without original EXIF metadata. Photos are displayed in the interface and are not automatically passed to the chat model. Deploy both backend and frontend for photo support; no database migration or new dependency is required.
-
-
-### Companion chat appearance
-
-The companion gallery keeps two portrait cards per row and supports local character search. Individual chats fill the viewport, with conversation history and settings in on-demand drawers. Chat settings retain model switching, character editing, deletion, and locking; native browser fullscreen is available where supported.
-
-In Photos, select **Use as chat background** on any uploaded profile picture or gallery photo. The authenticated `PUT /V1/roleplay/profiles/{id}/background` endpoint accepts `{"image_id": "photo-id"}` or `{"image_id": null}` to reset. The choice is stored per character as `chat_background_id` and survives reloads and text edits. Only photos belonging to that character can be selected. Removing the selected image, or replacing a portrait selected as the background, restores the default background. Both frontend and backend must be redeployed for this update.
+Redeploy both frontend and backend. Database cleanup requires starting the updated backend with `MONGODB_URI` and the correct `MONGODB_DB_NAME`. To run the same cleanup directly, from `backend/` use `python -m src.migrations.remove_companions`. The command reports which retired collections were dropped and verifies that none remain.

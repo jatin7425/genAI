@@ -55,9 +55,12 @@ const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message)
 const noOverflow=async()=>assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'horizontal overflow');
 try{
  await page.goto('http://127.0.0.1:4179/login');await page.getByText('Welcome back.').waitFor();await noOverflow();await page.screenshot({path:root+'/cortex-login.png'});
- await page.evaluate(()=>localStorage.setItem('cortex.authToken','ui-test-fixture'));
+ await page.evaluate(()=>{localStorage.setItem('cortex.authToken','ui-test-fixture');sessionStorage.setItem('cortex.secretWorld','retired-token');sessionStorage.setItem('cortex.companionModel','retired-model')});
  await page.goto('http://127.0.0.1:4179/chat');await page.getByText('Where should we begin?').waitFor();await noOverflow();await page.screenshot({path:root+'/cortex-desktop.png'});
  await page.getByRole('link',{name:'Planning a research project',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Planning a research project',exact:true}).count(),1);
+ assert.equal(await page.evaluate(()=>sessionStorage.getItem('cortex.secretWorld')),null);assert.equal(await page.evaluate(()=>sessionStorage.getItem('cortex.companionModel')),null);
+ for(const phrase of ['Open the secret world of roleplay','Open the secret world of releplay']){await page.getByLabel('Search conversations').fill(phrase);assert.equal(await page.getByLabel('Search conversations').inputValue(),phrase);assert.equal(await page.getByRole('dialog').count(),0)}await page.getByLabel('Search conversations').fill('');
+ for(const path of ['/secret-world','/secret-world/retired-character']){await page.goto('http://127.0.0.1:4179'+path);await page.waitForURL('**/chat');await page.getByText('Where should we begin?').waitFor();assert.equal(await page.getByRole('dialog').count(),0)}
  assert(!await page.getByRole('button',{name:'Send message',exact:true}).isEnabled());
  await page.getByLabel('Message Cortex',{exact:true}).fill('First line');await page.getByLabel('Message Cortex',{exact:true}).press('Shift+Enter');assert((await page.getByLabel('Message Cortex',{exact:true}).inputValue()).includes('\n'));assert.equal(chatRequests.length,0);
  await page.getByRole('button',{name:'Choose model'}).click();await page.getByRole('button',{name:'nvidia/nemotron-3-super-120b-a12b',exact:true}).click();assert(await page.getByRole('button',{name:'Choose model'}).innerText().then(s=>s.includes('nvidia/nemotron-3-super-120b-a12b')));

@@ -8,8 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:ui": "node scripts/ui-smoke.mjs",
-    "test:companions": "node scripts/companion-smoke.mjs"
+    "test:ui": "node scripts/ui-smoke.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

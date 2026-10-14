@@ -1,7 +1,12 @@
 import os
+import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
+from src.db import get_db
+from src.migrations.remove_companions import purge_retired_data
 
 from src.config import CONFIG
 from src.api import api_router
@@ -9,7 +14,15 @@ from src.api import api_router
 # The API runs headless — ask_user() must go through the interaction bridge, not input().
 CONFIG.setdefault("flags", {})["is_terminal"] = False
 
-app = FastAPI(title="genAI Chat API")
+@asynccontextmanager
+async def lifespan(app):
+    dropped = await run_in_threadpool(purge_retired_data, get_db())
+    if dropped:
+        logging.info("Removed retired feature collections: %s", ", ".join(dropped))
+    yield
+
+
+app = FastAPI(title="genAI Chat API", lifespan=lifespan)
 
 # The deployed frontend's origin (e.g. https://your-app.vercel.app) — not a
 # localhost/127.0.0.1 port, so it needs to be explicitly allow-listed on top

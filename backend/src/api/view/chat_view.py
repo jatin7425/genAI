@@ -19,8 +19,7 @@ class ChatService:
     can show live progress for a conversation even if it didn't originate the
     request — not just the final saved result once it's done."""
 
-    def __init__(self, agent, persona_service, broadcaster, conversation_service=None, attachment_service=None, memory_service=None, tool_provider=None):
-        self.tool_provider = tool_provider
+    def __init__(self, agent, persona_service, broadcaster, conversation_service=None, attachment_service=None, memory_service=None):
         self.attachment_service = attachment_service
         self.agent = agent
         self.memory_service = memory_service
@@ -84,7 +83,7 @@ class ChatService:
         def on_token(chunk: str):
             session.event_queue.put(("token", chunk))
 
-        extra_tools, extra_tool_dispatch = self.tool_provider(session_id) if self.tool_provider else ([], {})
+        extra_tools, extra_tool_dispatch = [], {}
 
         # Runtime history contains restored messages and unsaved current turns.
         # No cross-session lookup is permitted; requests are compacted copies.

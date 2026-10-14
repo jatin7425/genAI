@@ -1,4 +1,4 @@
-import { Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AudioLines, BarChart3, Brain, Check, CheckCircle2, ChevronDown, CircleAlert, CircleHelp, Code2, Compass, Copy, FileText, Globe, Lightbulb, LoaderCircle, LockKeyhole, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, Sparkles, Square, Trash2, Upload, UserRound, X, Pencil, Images, Image, Wallpaper, Maximize, type LucideIcon } from 'lucide-react'
+import { Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AudioLines, BarChart3, Brain, Check, CheckCircle2, ChevronDown, CircleAlert, CircleHelp, Code2, Compass, Copy, FileText, Globe, Lightbulb, LoaderCircle, LockKeyhole, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, Sparkles, Square, Trash2, Upload, UserRound, X, Pencil, type LucideIcon } from 'lucide-react'
 
 const icons: Record<string, LucideIcon> = {
   graphic_eq: AudioLines, add: Plus, arrow_forward: ArrowRight, arrow_back: ArrowLeft,
@@ -11,7 +11,6 @@ const icons: Record<string, LucideIcon> = {
   person: UserRound, lock: LockKeyhole, search: Search, search_insights: Search,
   travel_explore: Globe, psychology: Brain, progress_activity: LoaderCircle,
   bar_chart: BarChart3, route: Compass, code: Code2, lightbulb: Lightbulb,
-  photo_library: Images, image: Image, wallpaper: Wallpaper, fullscreen: Maximize,
   auto_awesome: Sparkles, upload_file: Upload, cloud_upload: Upload, bolt: Activity,
 }
 
