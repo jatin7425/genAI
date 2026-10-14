@@ -3,6 +3,7 @@ import type { ChatAttachment } from '../api/attachments'
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { useOutletContext, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { SearchSources } from '../components/chat/SearchSources'
 import { ChatBubble } from '../components/chat/ChatBubble'
 import { LiveThinkingTrace } from '../components/chat/LiveThinkingTrace'
 import { ChatInput } from '../components/chat/ChatInput'
@@ -204,6 +205,7 @@ export function ChatConversationScreen() {
                 <ChatBubble role="agent" accent={failed}>
                   <div className="flex-1 min-w-0">
                     <Markdown>{turn.text}</Markdown>
+                    {!turn.streaming && <SearchSources sources={turn.sources} note={turn.sourceNote} />}
                   </div>
                 </ChatBubble>
                 <AgentActionButtons

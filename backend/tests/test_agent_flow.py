@@ -37,17 +37,20 @@ class AgentFlowTest(unittest.TestCase):
         ])
         research = agent.agent_factory.web_search_agent
         research.llm_client = ScriptedClient([
-            [{'reasoning_content':'Plan a search.'},{'accumulated_tool_calls':[tool('duckduckgo_search',{'query':'software companies Pune'},'search-call')]}],
+            [{'reasoning_content':'Plan a search.'},{'content':'Internal research draft.'},{'accumulated_tool_calls':[tool('duckduckgo_search',{'query':'software companies Pune'},'search-call')]}],
             [{'accumulated_tool_calls':[tool('submit_answer',{'answer':'Found results','sources':['https://example.com'],'confidence':'high'},'answer-call')]}],
         ])
+        research.web_search.read_page = lambda url, query='': {'status':'success','url':url,'title':'Source','text':'Relevant verified source text.'}
         searches = []; events = []; tokens = []
         research.web_search.duckduckgo_search = lambda query, max_results=10: searches.append(query) or [{'title':'Result','link':'https://example.com','snippet':'Relevant result'}]
         result = agent.run([agent.build_system_message(),{'role':'user','content':'Find companies'}], model='gemini-3.5-flash', on_event=lambda *args:events.append(args), on_token=tokens.append)
         self.assertEqual(result['answer'],'Verified final answer.')
+        self.assertEqual(result['sources'],['https://example.com/'])
         self.assertEqual(searches,['software companies Pune'])
         self.assertTrue(all(call['model']=='gemini-3.5-flash' for call in research.llm_client.calls))
         self.assertIn('Searching the web…', str(events))
         self.assertNotIn('Plan a search.', ''.join(tokens))
+        self.assertNotIn('Internal research draft.', ''.join(tokens))
         final_messages = agent.llm_client.calls[-1]['messages']
         self.assertTrue(any(message.get('role')=='tool' and message.get('tool_call_id')=='parent-call' for message in final_messages))
 
@@ -62,6 +65,16 @@ class AgentFlowTest(unittest.TestCase):
         self.assertIn('event: done',events);self.assertIn('provider_limit',events)
         messages=chat._sessions['fixture-chat'].messages
         self.assertTrue(any(item.get('role')=='tool' and item.get('tool_call_id')=='parent-call' for item in messages))
+
+    def test_empty_research_does_not_become_a_fabricated_parent_answer(self):
+        agent = orchestrator()
+        agent.llm_client = ScriptedClient([[{'accumulated_tool_calls':[tool('web_search_agent',{'query':'Research'},'research-call'),tool('other',{},'pending-call')]}]])
+        agent.agent_factory.web_search_agent.web_search_agent = lambda **kwargs: {'answer':None,'sources':[],'confidence':'low','note':'Search providers are unavailable.'}
+        messages=[agent.build_system_message(),{'role':'user','content':'Research this'}]
+        result=agent.run(messages,model='selected')
+        self.assertEqual(result['status'],'error'); self.assertEqual(result['provider_issue']['code'],'web_search_failed')
+        self.assertEqual(len(agent.llm_client.calls),1)
+        self.assertEqual({m['tool_call_id'] for m in messages if m.get('role')=='tool'},{'research-call','pending-call'})
 
     def test_attachment_in_clarification_is_added_after_tool_result(self):
         from test_chat_attachments import MemoryAttachments

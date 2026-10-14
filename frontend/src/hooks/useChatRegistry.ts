@@ -6,7 +6,7 @@ import { stripToolTagWrapper } from '../utils/text'
 
 export type ChatTurn =
   | { kind: 'user'; id: string; text: string; attachments?: ChatAttachment[] }
-  | { kind: 'agent'; id: string; text: string; status: ChatDonePayload['status']; streaming?: boolean }
+  | { kind: 'agent'; id: string; text: string; status: ChatDonePayload['status']; streaming?: boolean; sources?: string[]; sourceNote?: string }
   | { kind: 'question'; id: string; text: string }
 
 let idCounter = 0
@@ -225,7 +225,7 @@ export function useChatRegistry() {
                   ...r,
                   turns: r.turns.map((t) =>
                     t.kind === 'agent' && t.id === targetId
-                      ? { ...t, text: finalText, status: payload.status, streaming: false }
+                      ? { ...t, text: finalText, status: payload.status, streaming: false, sources: isError ? [] : payload.sources, sourceNote: payload.note }
                       : t,
                   ),
                   awaitingAnswer: false,
@@ -243,7 +243,7 @@ export function useChatRegistry() {
                 ...r,
                 turns: [
                   ...r.turns,
-                  { kind: 'agent', id: nextId(), text: finalText, status: payload.status },
+                  { kind: 'agent', id: nextId(), text: finalText, status: payload.status, sources: isError ? [] : payload.sources, sourceNote: payload.note },
                 ],
                 awaitingAnswer: false,
                 providerIssue: payload.provider_issue,

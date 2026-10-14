@@ -101,6 +101,9 @@ class orchestrator:
         model = model or "nvidia"
         context_manager = context_manager or ContextManager(self.llm_client)
         context_retry = False
+        research_sources = []
+        research_confidence = "unknown"
+        research_note = None
 
         def emit(kind, content):
             if on_event:
@@ -177,8 +180,9 @@ class orchestrator:
                 return {
                     "status": "done",
                     "answer": accumulated_content,
-                    "sources": [],
-                    "confidence": "unknown",
+                    "sources": research_sources,
+                    "confidence": research_confidence,
+                    "note": research_note,
                 }
 
             # --- Execute each tool call ----------------------------------------
@@ -193,6 +197,10 @@ class orchestrator:
                     require_history_search = False
                 if name == "submit_answer":
                     emit("answer", args.get("answer"))
+                    if research_sources:
+                        args["sources"] = research_sources
+                        args["note"] = research_note
+                        if research_confidence == "low": args["confidence"] = "low"
                     return {"status": "done", **args}
 
                 emit("thinking", "Searching the web…" if name == "web_search_agent" else f"Using {name}…")
@@ -208,6 +216,17 @@ class orchestrator:
                         result = {"error": f"{name} failed: {e}"}
                 else:
                     result = {"error": f"unknown tool {name}"}
+                if name == "web_search_agent" and isinstance(result, dict):
+                    if result.get("answer") is None:
+                        completed = {message.get("tool_call_id") for message in messages if message.get("role") == "tool"}
+                        for pending in final_tool_calls:
+                            if pending["id"] not in completed:
+                                messages.append({"role": "tool", "tool_call_id": pending["id"], "content": json.dumps(result) if pending["id"] == call["id"] else "Skipped because web research failed."})
+                        issue = ProviderError("web_search_failed", result.get("note") or "Web research could not find usable evidence. Try a more specific query.", model)
+                        return {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": str(issue), "provider_issue": issue.issue}
+                    if result.get("note"): research_note = result["note"]
+                    research_sources = list(dict.fromkeys(research_sources + result.get("sources", [])))
+                    research_confidence = "low" if research_confidence == "low" or result.get("confidence") == "low" else result.get("confidence", "medium")
                 emit("thinking", f"{name} completed.")
 
                 messages.append({
