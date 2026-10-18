@@ -26,6 +26,26 @@ class orchestrator:
     def _tools(self):
         return self.agent_factory.agents_list() + CommonTools._tool()
 
+    MAX_MODEL_SWITCHES = 3
+
+    def _fallback_model(self, model, tried, code):
+        """Next untried chat model to answer with after `model` failed.
+
+        A context overflow needs a strictly larger window (the smallest such);
+        other provider failures can be answered by any other available model.
+        """
+        client = self.llm_client
+        try:
+            candidates = [m for m in client.available_models() if m not in tried and "embed" not in m.lower()]
+            if code != "context_limit":
+                return candidates[0] if candidates else None
+            current = client.context_window(model)
+            windows = {m: client.context_window(m) for m in candidates}
+        except Exception:
+            return None
+        larger = [m for m, w in windows.items() if isinstance(w, int) and w > current]
+        return min(larger, key=windows.get) if larger else None
+
     def system_message(self, max_iterations, persona_prompt=None):
         base = textwrap.dedent(f"""\
             You are a helpful conversational assistant. For casual conversation,
@@ -101,6 +121,7 @@ class orchestrator:
         model = model or "nvidia"
         context_manager = context_manager or ContextManager(self.llm_client)
         context_retry = False
+        tried_models = set()
         research_sources = []
         research_confidence = "unknown"
         research_note = None
@@ -108,6 +129,20 @@ class orchestrator:
         def emit(kind, content):
             if on_event:
                 on_event(kind, content)
+
+        def switch_model(code):
+            """Move to another available model; returns False when none is left."""
+            nonlocal model, context_retry
+            tried_models.add(model)
+            if len(tried_models) > self.MAX_MODEL_SWITCHES:
+                return False
+            fallback = self._fallback_model(model, tried_models, code)
+            if not fallback:
+                return False
+            emit("model_switched", {"from": model, "to": fallback, "reason": code})
+            emit("thinking", f"Switching to {fallback}…")
+            model, context_retry = fallback, False
+            return True
 
         for iteration in range(max_iterations + 1):
             if iteration == max_iterations and not context_retry:
@@ -141,10 +176,14 @@ class orchestrator:
                         final_tool_calls = delta["accumulated_tool_calls"]
 
             except ProviderError as exc:
-                if exc.issue.get("code") == "context_limit" and not context_retry and not accumulated_content and not final_tool_calls:
-                    context_retry = True
-                    emit("thinking", "Reducing context to fit this model…")
-                    continue
+                if not accumulated_content and not final_tool_calls:
+                    code = exc.issue.get("code")
+                    if code == "context_limit" and not context_retry:
+                        context_retry = True
+                        emit("thinking", "Reducing context to fit this model…")
+                        continue
+                    if switch_model(code):
+                        continue
                 # Never leave a tool-call turn without its required tool results.
                 for call in final_tool_calls or []:
                     messages.append({"role": "tool", "tool_call_id": call["id"], "content": "Provider request failed."})
@@ -174,6 +213,9 @@ class orchestrator:
             # --- No tool calls → direct answer ---------------------------------
             if not final_tool_calls:
                 if not accumulated_content.strip():
+                    if switch_model("empty_response"):
+                        messages.pop()
+                        continue
                     issue = ProviderError("empty_response", "The model ended without an answer. Try again or switch models.", model)
                     return {"status": "error", "answer": None, "sources": [], "confidence": "low", "note": str(issue), "provider_issue": issue.issue}
                 emit("answer", accumulated_content)

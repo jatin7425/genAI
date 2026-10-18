@@ -149,6 +149,39 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(result['status'], 'done')
         self.assertEqual(len(agent.llm_client.calls), 2)
 
+    def test_context_overflow_switches_to_larger_available_model(self):
+        agent = orchestrator()
+        client = ScriptedClient([ProviderError('context_limit', 'Too large', 'small'), ProviderError('context_limit', 'Too large', 'small'), [{'content': 'Answer from larger model.'}]])
+        windows = {'small': 8192, 'medium': 32000, 'large': 128000, 'embed-x': 999999}
+        client.available_models = lambda: list(windows)
+        client.context_window = lambda m: windows.get(m, 8192)
+        agent.llm_client = client
+        messages = [agent.build_system_message(), {'role': 'user', 'content': 'Hello'}]
+        events = []
+        result = agent.run(messages, model='small', on_event=lambda kind, content: events.append((kind, content)))
+        self.assertEqual(result['status'], 'done')
+        self.assertEqual([c['model'] for c in client.calls], ['small', 'small', 'medium'])
+        self.assertIn(('model_switched', {'from': 'small', 'to': 'medium', 'reason': 'context_limit'}), events)
+
+    def test_provider_failure_switches_to_another_available_model(self):
+        agent = orchestrator()
+        client = ScriptedClient([ProviderError('provider_unavailable', 'Down', 'a'), ProviderError('provider_limit', 'Limit', 'b'), [{'content': 'Answer from c.'}]])
+        client.available_models = lambda: ['a', 'b', 'embed-x', 'c']
+        agent.llm_client = client
+        events = []
+        result = agent.run([agent.build_system_message(), {'role': 'user', 'content': 'Hi'}], model='a', on_event=lambda kind, content: events.append((kind, content)))
+        self.assertEqual(result['answer'], 'Answer from c.')
+        self.assertEqual([c['model'] for c in client.calls], ['a', 'b', 'c'])
+        self.assertEqual([c['to'] for k, c in events if k == 'model_switched'], ['b', 'c'])
+
+    def test_provider_failure_without_alternatives_reports_error(self):
+        agent = orchestrator()
+        client = ScriptedClient([ProviderError('provider_unavailable', 'Down', 'a')])
+        client.available_models = lambda: ['a']
+        agent.llm_client = client
+        result = agent.run([agent.build_system_message(), {'role': 'user', 'content': 'Hi'}], model='a')
+        self.assertEqual(result['provider_issue']['code'], 'provider_unavailable')
+
     def test_worker_history_tool_sees_unsaved_messages_and_only_its_session(self):
         class Agent:
             def build_system_message(self, prompt): return {'role': 'system', 'content': prompt}

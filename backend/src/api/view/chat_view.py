@@ -76,6 +76,9 @@ class ChatService:
         set_bridge(session.bridge)
 
         def on_event(kind, content):
+            if kind == "model_switched":
+                # Follow-up turns keep using the model that actually answered.
+                session.model = content["to"]
             session.event_queue.put((kind, content))
             if kind == "thinking":
                 self.broadcaster.broadcast("chat_thinking", {"session_id": session_id, "content": content})
@@ -211,6 +214,8 @@ class ChatService:
                 yield sse("thinking", {"content": content})
             elif kind == "token":
                 yield sse("token", {"content": content})
+            elif kind == "model_switched":
+                yield sse("model_switched", content)
             elif kind == "done":
                 yield sse("done", session.result_holder.get("result", {}))
                 return

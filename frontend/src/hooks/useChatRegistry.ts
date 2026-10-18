@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import { streamChat } from '../api/chat'
 import type { ChatDonePayload, ProviderIssue } from '../api/types'
 import { stripToolTagWrapper } from '../utils/text'
+import { showToast } from '../utils/toastState'
 
 export type ChatTurn =
   | { kind: 'user'; id: string; text: string; attachments?: ChatAttachment[] }
@@ -172,6 +173,10 @@ export function useChatRegistry() {
           },
           onThinking: (content) => {
             patch((r) => ({ ...r, thinking: [...r.thinking, content] }))
+          },
+          onModelSwitched: ({ from, to }) => {
+            patch((r) => ({ ...r, model: to }))
+            showToast(`${from} couldn't respond — switched to ${to}.`, 'info')
           },
           onToken: (chunk) => {
             if (!streamingTurnId) {

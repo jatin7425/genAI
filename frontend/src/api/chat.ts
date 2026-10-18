@@ -37,6 +37,7 @@ export async function streamChat(
       if (event === 'session') handlers.onSession?.(payload.session_id)
       else if (event === 'thinking') handlers.onThinking?.(payload.content)
       else if (event === 'token') handlers.onToken?.(payload.content)
+      else if (event === 'model_switched') handlers.onModelSwitched?.(payload)
       else if (event === 'question') { completed = true; handlers.onQuestion?.(payload.question) }
       else if (event === 'done') { completed = true; handlers.onDone?.(payload) }
     }, 45000)
