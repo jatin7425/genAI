@@ -3,6 +3,7 @@ import { fetchConversations, upsertConversation, deleteConversation, type Server
 import { streamConversationEvents } from '../api/conversationEvents'
 import { showToast } from '../utils/toastState'
 import type { ChatTurn } from './useChatRegistry'
+import type { Story } from '../api/stories'
 
 export type StoredConversation = {
   sessionId: string
@@ -11,6 +12,7 @@ export type StoredConversation = {
   title: string
   turns: ChatTurn[]
   updatedAt: number
+  story?: boolean
 }
 
 function fromServer(c: ServerConversation): StoredConversation {
@@ -21,6 +23,7 @@ function fromServer(c: ServerConversation): StoredConversation {
     title: c.title,
     turns: c.turns || [],
     updatedAt: new Date(c.updated_at).getTime(),
+    story: c.story ?? false,
   }
 }
 
@@ -40,6 +43,7 @@ export type RemoteChatHandlers = {
   onChatThinking?: (sessionId: string, content: string) => void
   onChatEnded?: (sessionId: string) => void
   onConversationUpserted?: (sessionId: string, persona: string, model: string | null, turns: ChatTurn[]) => void
+  onStoryUpdated?: (story: Story) => void
 }
 
 export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = {}) {
@@ -117,6 +121,10 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
           onChatStarted: (sessionId) => remoteChatHandlersRef.current.onChatStarted?.(sessionId),
           onChatThinking: (sessionId, content) => remoteChatHandlersRef.current.onChatThinking?.(sessionId, content),
           onChatEnded: (sessionId) => remoteChatHandlersRef.current.onChatEnded?.(sessionId),
+          onStoryUpdated: (story) => {
+            setConversations(prev => prev.map(c => c.sessionId === story.session_id ? { ...c, story: true } : c))
+            remoteChatHandlersRef.current.onStoryUpdated?.(story)
+          },
         },
         controller.signal,
       )
@@ -145,6 +153,7 @@ export function useConversationHistory(remoteChatHandlers: RemoteChatHandlers = 
         title: existing?.title ?? deriveTitle(turns),
         turns,
         updatedAt: Date.now(),
+        story: existing?.story,
       }
       const rest = prev.filter((c) => c.sessionId !== sessionId)
       return [updated, ...rest]

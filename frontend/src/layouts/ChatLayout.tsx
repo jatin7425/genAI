@@ -9,6 +9,11 @@ import { ModelSwitcher } from '../components/chat/ModelSwitcher'
 import { useChatRegistry, type ChatTurn } from '../hooks/useChatRegistry'
 import { useConversationHistory, type StoredConversation } from '../hooks/useConversationHistory'
 import { useAuth } from '../hooks/useAuth'
+import { Icon } from '../components/Icon'
+import { CreateStoryModal } from '../components/story/CreateStoryModal'
+import { StoryPanel } from '../components/story/StoryPanel'
+import { createStory, fetchStory, removeCharacter, saveCharacter, updateStory, type Story, type StoryDraft } from '../api/stories'
+import { showToast } from '../utils/toastState'
 
 const DEFAULT_PERSONA = 'Default Assistant'
 
@@ -25,7 +30,11 @@ export type ChatOutletContext = {
   awaitingAnswer: boolean
   isReady: boolean
   providerIssue?: ProviderIssue
+  storyMode: boolean
 }
+
+const STORY_COMMAND = /^\/createstory(?:\s+|$)/i
+const STORY_KICKOFF = 'Begin the story.'
 
 export function ChatLayout() {
   const navigate = useNavigate()
@@ -37,6 +46,9 @@ export function ChatLayout() {
   const [personaModalOpen, setPersonaModalOpen] = useState(false)
   const [editPersonaName, setEditPersonaName] = useState<string | undefined>()
   const [personaRefreshKey, setPersonaRefreshKey] = useState(0)
+  const [story, setStory] = useState<Story | null>(null)
+  const [storyOpen, setStoryOpen] = useState(() => window.matchMedia?.('(min-width: 768px)').matches ?? true)
+  const [storyModal, setStoryModal] = useState<{ idea: string } | null>(null)
 
   const {
     activeKey,
@@ -55,6 +67,9 @@ export function ChatLayout() {
     clearDirty,
   } = useChatRegistry()
 
+  const activeKeyRef = useRef(activeKey)
+  activeKeyRef.current = activeKey
+
   const {
     conversations,
     upsert,
@@ -67,7 +82,17 @@ export function ChatLayout() {
     onChatThinking: appendRemoteThinking,
     onChatEnded: clearRemoteStreaming,
     onConversationUpserted: syncRemoteTurns,
+    onStoryUpdated: (updated) => { if (updated.session_id === activeKeyRef.current) setStory(updated) },
   })
+
+  // Load the story bible (if any) for whichever conversation is on screen.
+  useEffect(() => {
+    if (!activeKey) { setStory(null); return }
+    let cancelled = false
+    setStory(current => current?.session_id === activeKey ? current : null)
+    fetchStory(activeKey).then(loaded => { if (!cancelled) setStory(loaded) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [activeKey])
 
   // On every change to the ACTIVE chat, persist it to the server.
   // (We skip saving truly empty chats until they have at least 1 turn).
@@ -145,12 +170,38 @@ export function ChatLayout() {
     sendMessage(lastUserTurn.text, effectivePersona, effectiveModel, { retry: true, attachments: lastUserTurn.attachments })
   }
 
+  // The bible is saved under a fresh session id first, so the narrator's very
+  // first turn already runs in story mode.
+  const startStory = async (draft: StoryDraft) => {
+    const sessionId = crypto.randomUUID()
+    const created = await createStory(sessionId, { ...draft, model: effectiveModel })
+    setStory(created)
+    setStoryModal(null)
+    if (window.matchMedia?.('(min-width: 768px)').matches) setStoryOpen(true)
+    sendMessage(STORY_KICKOFF, effectivePersona, effectiveModel, { sessionId })
+  }
+
+  const handleSend = (text: string, attachments?: ChatAttachment[]) => {
+    if (!STORY_COMMAND.test(text)) return sendMessage(text, effectivePersona, effectiveModel, { attachments })
+    const idea = text.replace(STORY_COMMAND, '').trim()
+    if (!idea) return setStoryModal({ idea: '' })
+    if (attachments?.length) showToast('Attachments aren’t used when creating a story.', 'info')
+    showToast('Setting up your story…', 'info')
+    startStory({ description: idea }).catch(error => {
+      showToast(error instanceof Error ? error.message : 'The story could not be created.', 'error')
+      setStoryModal({ idea })
+    })
+  }
+
+  const showStory = !!story && story.session_id === activeKey && location.pathname.startsWith('/chat/')
+  const applyStory = (request: (sessionId: string) => Promise<Story>) => story ? request(story.session_id).then(setStory) : Promise.resolve()
+
   const outletContext: ChatOutletContext = {
-    onSend: (text, attachments) => sendMessage(text, effectivePersona, effectiveModel, { attachments }),
+    onSend: handleSend,
     onStop: () => {
       if (activeKey) stopMessage(activeKey)
     },
-    onSelectPrompt: (title) => sendMessage(title, effectivePersona, effectiveModel),
+    onSelectPrompt: handleSend,
     onEditLastMessage: handleEditLastMessage,
     onRetry: handleRetry,
     injectOlderTurns: (sessionId, olderTurns) => {
@@ -162,6 +213,7 @@ export function ChatLayout() {
     awaitingAnswer: active?.awaitingAnswer ?? false,
     providerIssue: active?.providerIssue,
     isReady: !!active && activeKey === urlSessionId,
+    storyMode: showStory,
   }
 
   const { logout } = useAuth()
@@ -178,10 +230,12 @@ export function ChatLayout() {
         onOpenConversation={handleOpenConversation}
         onDeleteConversation={remove}
         onNewChat={handleNewChat}
+        onNewStory={() => setStoryModal({ idea: '' })}
         onLogout={logout}
         onSettings={() => navigate('/settings')}
         headerRightSlot={
           <div className="flex items-center gap-1 md:gap-3">
+            {showStory && <button onClick={() => setStoryOpen(open => !open)} aria-pressed={storyOpen} title={storyOpen ? 'Hide story cast' : 'Show story cast'} className={`flex items-center gap-1.5 rounded-lg border px-2 sm:px-3 py-2 text-sm transition-colors ${storyOpen ? 'border-primary text-primary bg-primary/5' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-high'}`}><Icon name="group" className="text-[17px]" /><span className="hidden sm:inline">Cast</span></button>}
             <ModelSwitcher activeModel={effectiveModel} disabled={active?.status === 'streaming' || active?.awaitingAnswer} onSelectModel={model => { setActiveModel(model); selectModel(model) }} />
             <PersonaSwitcher
               activePersona={effectivePersona}
@@ -193,8 +247,27 @@ export function ChatLayout() {
           </div>
         }
       >
-        <Suspense fallback={<div className="flex-1 grid place-items-center text-sm text-on-surface-variant" role="status">Loading…</div>}><Outlet context={outletContext} /></Suspense>
+        <div className="flex flex-1 min-h-0">
+          {showStory && storyOpen && story && <>
+            <div className="md:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setStoryOpen(false)} />
+            <div className="fixed md:static inset-y-0 left-0 z-30 md:z-auto w-[300px] max-w-[85%] md:w-72 md:max-w-none shrink-0">
+              <StoryPanel story={story} onClose={() => setStoryOpen(false)}
+                onUpdate={fields => applyStory(id => updateStory(id, fields))}
+                onSaveCharacter={(character, originalName) => applyStory(id => saveCharacter(id, character, originalName))}
+                onRemoveCharacter={name => applyStory(id => removeCharacter(id, name))} />
+            </div>
+          </>}
+          <div className="flex-1 min-w-0 flex flex-col">
+            <Suspense fallback={<div className="flex-1 grid place-items-center text-sm text-on-surface-variant" role="status">Loading…</div>}><Outlet context={outletContext} /></Suspense>
+          </div>
+        </div>
       </AppShell>
+
+      {storyModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-stack-md bg-black/60">
+          <CreateStoryModal initialIdea={storyModal.idea} onClose={() => setStoryModal(null)} onCreate={startStory} />
+        </div>
+      )}
 
       {personaModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-stack-md bg-black/60">

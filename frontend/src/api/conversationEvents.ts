@@ -2,6 +2,7 @@ import { API_V1 } from './config'
 import { authFetch } from './http'
 import { readSseStream } from './sse'
 import type { ServerConversation } from './conversations'
+import type { Story } from './stories'
 
 export type ConversationEventHandlers = {
   onUpserted?: (conversation: ServerConversation) => void
@@ -10,6 +11,7 @@ export type ConversationEventHandlers = {
   onChatStarted?: (sessionId: string) => void
   onChatThinking?: (sessionId: string, content: string) => void
   onChatEnded?: (sessionId: string) => void
+  onStoryUpdated?: (story: Story) => void
 }
 
 /** Long-lived SSE connection — resolves when the stream ends (error, server restart, etc). */
@@ -25,5 +27,6 @@ export async function streamConversationEvents(handlers: ConversationEventHandle
     else if (event === 'chat_started') handlers.onChatStarted?.(payload.session_id)
     else if (event === 'chat_thinking') handlers.onChatThinking?.(payload.session_id, payload.content)
     else if (event === 'chat_ended') handlers.onChatEnded?.(payload.session_id)
+    else if (event === 'story_updated') handlers.onStoryUpdated?.(payload)
   })
 }

@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Icon } from '../Icon'
 import { FilePreview } from './Attachments'
 import { ATTACHMENT_ACCEPT, deleteDraftAttachment, uploadAttachment, type ChatAttachment } from '../../api/attachments'
 
-type PendingFile = { key: string; file: File; attachment?: ChatAttachment; error?: string; uploading: boolean }
+const SLASH_COMMANDS = [
+  { name: '/createstory', args: '<your story idea, characters, and your role>', description: 'Start an interactive story. The narrator opens it and you steer.', icon: 'menu_book' },
+]
+
+type PendingFile ={ key: string; file: File; attachment?: ChatAttachment; error?: string; uploading: boolean }
 type ChatInputProps = {
   placeholder?: string; onSend?: (value: string, attachments?: ChatAttachment[]) => void; onStop?: () => void
   isStreaming?: boolean; variant?: 'floating' | 'inline'
@@ -48,6 +52,24 @@ export function ChatInput({ placeholder = 'Message Cortex…', onSend, onStop, i
     if (item.attachment) void deleteDraftAttachment(item.attachment.id).catch(() => {})
   }
   const blocked = files.some(file => file.uploading || file.error)
+  // Suggest commands while the user is still typing the command word.
+  const [commandIndex, setCommandIndex] = useState(0), [commandsDismissed, setCommandsDismissed] = useState(false)
+  const commandMatches = /^\/\S*$/.test(value) && !commandsDismissed ? SLASH_COMMANDS.filter(c => c.name.startsWith(value.toLowerCase())) : []
+  const chooseCommand = (name: string) => { setValue(`${name} `); setCommandIndex(0); textareaRef.current?.focus() }
+  const handleCommandKeys = (event: KeyboardEvent) => {
+    if (!commandMatches.length) return false
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setCommandIndex(i => (i + (event.key === 'ArrowDown' ? 1 : commandMatches.length - 1)) % commandMatches.length)
+    } else if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+      event.preventDefault()
+      chooseCommand(commandMatches[Math.min(commandIndex, commandMatches.length - 1)].name)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      setCommandsDismissed(true)
+    } else return false
+    return true
+  }
   const handleSend = () => {
     if (isStreaming || blocked || (!value.trim() && !files.length) || !onSend) return
     const attachments = files.flatMap(file => file.attachment ? [file.attachment] : [])
@@ -76,10 +98,22 @@ export function ChatInput({ placeholder = 'Message Cortex…', onSend, onStop, i
               <button type="button" aria-label={`Remove ${item.file.name}`} onClick={() => remove(item)} className="absolute top-1 right-1 p-1 text-on-surface-variant hover:text-error"><Icon name="close" className="text-[14px]" /></button>
             </div>)}
           </div>}
+          {commandMatches.length > 0 && <div role="listbox" id="slash-commands" aria-label="Commands" className="absolute left-3 right-3 bottom-full mb-2 z-20 rounded-xl border border-outline-variant bg-surface shadow-[0_12px_32px_rgba(20,40,25,0.16)] overflow-hidden py-1">
+            <p className="px-3 pt-1.5 pb-1 text-[10px] font-semibold tracking-wider uppercase text-on-surface-variant">Commands</p>
+            {commandMatches.map((command, index) => <button type="button" role="option" key={command.name} aria-selected={index === commandIndex}
+              onMouseDown={event => { event.preventDefault(); chooseCommand(command.name) }} onMouseEnter={() => setCommandIndex(index)}
+              className={`w-full flex items-start gap-3 px-3 py-2 text-left ${index === commandIndex ? 'bg-surface-container-high' : ''}`}>
+              <Icon name={command.icon} className="text-[17px] text-primary mt-0.5" />
+              <span className="min-w-0"><span className="block text-sm"><span className="font-medium">{command.name}</span> <span className="text-on-surface-variant text-xs">{command.args}</span></span>
+                <span className="block text-xs text-on-surface-variant">{command.description}</span></span>
+            </button>)}
+            <p className="px-3 pt-1 pb-1.5 text-[10px] text-on-surface-variant/80">↑↓ to choose · Tab or Enter to select · Esc to close</p>
+          </div>}
           <textarea ref={textareaRef} value={value}
-            onChange={event => { setValue(event.target.value); event.target.style.height = '64px'; event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px` }}
+            aria-controls={commandMatches.length ? 'slash-commands' : undefined} aria-autocomplete="list"
+            onChange={event => { setValue(event.target.value); setCommandsDismissed(false); event.target.style.height = '64px'; event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px` }}
             onPaste={event => { const pasted = Array.from(event.clipboardData.files); if (pasted.length) { event.preventDefault(); addFiles(pasted) } }}
-            onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); handleSend() } }}
+            onKeyDown={event => { if (handleCommandKeys(event)) return; if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); handleSend() } }}
             disabled={isStreaming} aria-label="Message Cortex"
             className="w-full min-h-16 max-h-44 bg-transparent resize-none outline-none text-sm leading-relaxed placeholder:text-on-surface-variant/70 disabled:opacity-60"
             placeholder={isStreaming ? 'Cortex is working on your response…' : placeholder} rows={2} />

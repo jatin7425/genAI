@@ -10,6 +10,7 @@ from src.api.endpoint.persona import router as persona_router
 from src.api.endpoint.suggestion import router as suggestion_router
 
 from src.api.endpoint.memory import router as memory_router
+from src.api.endpoint.story import router as story_router
 
 api_router = APIRouter(prefix="/V1")
 api_router.include_router(auth_router, tags=["Auth"])
@@ -21,6 +22,7 @@ api_router.include_router(conversation_router, tags=["Conversations"], dependenc
 api_router.include_router(attachments_router, tags=["Attachments"], dependencies=[Depends(auth_service.require_auth)])
 
 api_router.include_router(memory_router, tags=["Memory"], dependencies=[Depends(auth_service.require_auth)])
+api_router.include_router(story_router, tags=["Stories"], dependencies=[Depends(auth_service.require_auth)])
 
 
 __all__ = ["api_router"]

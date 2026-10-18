@@ -85,5 +85,10 @@ class MongoConversationRepository:
         result = self.collection.update_one({"_id": doc["_id"], "title_generated": {"$ne": True}}, {"$set": {"title": title, "title_generated": True}})
         return result.matched_count > 0
 
+    def rename(self, session_id, title):
+        doc = self._canonical(session_id)
+        if doc:
+            self.collection.update_one({"_id": doc["_id"]}, {"$set": {"title": title, "title_generated": True}})
+
     def delete(self, session_id):
         self.collection.delete_many({"session_id": session_id})

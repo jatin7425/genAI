@@ -9,6 +9,7 @@ export type ServerConversation = {
   title: string
   turns?: ChatTurn[]
   updated_at: string
+  story?: boolean
 }
 
 export type PaginatedResponse<T> = {

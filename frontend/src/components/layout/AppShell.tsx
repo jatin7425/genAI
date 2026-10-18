@@ -16,6 +16,7 @@ type AppShellProps = {
   onOpenConversation?: (conversation: StoredConversation) => void
   onDeleteConversation?: (sessionId: string) => void
   onNewChat?: () => void
+  onNewStory?: () => void
   onLogout?: () => void
   onSettings?: () => void
   children: ReactNode
@@ -32,6 +33,7 @@ export function AppShell({
   onOpenConversation,
   onDeleteConversation,
   onNewChat,
+  onNewStory,
   onLogout,
   onSettings,
   children,
@@ -65,6 +67,7 @@ export function AppShell({
         onOpenConversation={onOpenConversation}
         onDeleteConversation={onDeleteConversation}
         onNewChat={onNewChat}
+        onNewStory={onNewStory}
         onLogout={onLogout}
         onSettings={onSettings}
       />
@@ -85,6 +88,7 @@ export function AppShell({
               onOpenConversation={onOpenConversation}
               onDeleteConversation={onDeleteConversation}
               onNewChat={onNewChat}
+              onNewStory={onNewStory}
               onLogout={onLogout}
               onSettings={onSettings}
             />

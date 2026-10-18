@@ -15,7 +15,7 @@ import { fetchConversationMessages } from '../api/conversations'
 
 export function ChatConversationScreen() {
   const { sessionId } = useParams<{ sessionId?: string }>()
-  const { turns, thinking, status, awaitingAnswer, onSend, onStop, onEditLastMessage, onRetry, injectOlderTurns, isReady, providerIssue } =
+  const { turns, thinking, status, awaitingAnswer, onSend, onStop, onEditLastMessage, onRetry, injectOlderTurns, isReady, providerIssue, storyMode } =
     useOutletContext<ChatOutletContext>()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -225,7 +225,7 @@ export function ChatConversationScreen() {
       </div>
 
       {providerIssue && <div role="alert" className="mx-4 md:mx-6 mb-2 rounded-xl border border-tertiary/30 bg-tertiary/10 px-4 py-3 text-sm flex gap-3 items-start"><Icon name="warning" className="text-tertiary text-[20px] mt-0.5" /><div><p className="font-medium">{providerIssue.model || 'Selected model'} · {providerIssue.code === 'provider_limit' ? 'Limit reached' : 'Provider notice'}</p><p className="text-on-surface-variant mt-1">{providerIssue.message}</p><p className="text-xs text-on-surface-variant mt-2">Use the model menu above, then choose Try again below the response.</p></div></div>}
-      <ChatInputBar key={sessionId || "new-chat"} onSend={onSend} onStop={onStop} status={status} awaitingAnswer={awaitingAnswer} />
+      <ChatInputBar key={sessionId || "new-chat"} onSend={onSend} onStop={onStop} status={status} awaitingAnswer={awaitingAnswer} storyMode={storyMode} />
     </div>
   )
 }
@@ -235,18 +235,20 @@ function ChatInputBar({
   onStop,
   status,
   awaitingAnswer,
+  storyMode,
 }: {
   onSend: (text: string, attachments?: ChatAttachment[]) => void
   onStop: () => void
   status: 'idle' | 'streaming'
   awaitingAnswer: boolean
+  storyMode: boolean
 }) {
   return (
     <div className="chat-composer-bar shrink-0 bg-background">
       <div className="max-w-7xl mx-auto w-full">
         <ChatInput
           variant="inline"
-          placeholder={awaitingAnswer ? 'Type your answer here...' : 'Message Cortex...'}
+          placeholder={awaitingAnswer ? 'Type your answer here...' : storyMode ? 'What happens next? Act, speak, or (direct the narrator)…' : 'Message Cortex...'}
           onSend={onSend}
           onStop={onStop}
           isStreaming={status === 'streaming'}

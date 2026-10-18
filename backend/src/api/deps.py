@@ -31,8 +31,11 @@ conversation_repository = ConversationRepository()
 from src.api.repositories.mongo.memory_repository import MongoMemoryRepository
 from src.api.view.memory_view import MemoryService
 memory_service = MemoryService(MongoMemoryRepository(), os.getenv("AUTH_USERNAME") or "operator")
-conversation_service = ConversationService(conversation_repository, event_broadcaster, attachment_repository, llm_client)
-chat_service = ChatService(agent, persona_service, event_broadcaster, conversation_service, attachment_service, memory_service)
+from src.api.repositories.mongo.story_repository import MongoStoryRepository
+from src.api.view.story_view import StoryService
+story_service = StoryService(MongoStoryRepository(), event_broadcaster, llm_client)
+conversation_service = ConversationService(conversation_repository, event_broadcaster, attachment_repository, llm_client, story_service)
+chat_service = ChatService(agent, persona_service, event_broadcaster, conversation_service, attachment_service, memory_service, story_service)
 auth_service = AuthService(os.getenv("AUTH_USERNAME"), os.getenv("AUTH_PASSWORD_HASH"))
 model_service = ModelService(llm_client)
 suggestion_service = SuggestionService(llm_client)

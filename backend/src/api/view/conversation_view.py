@@ -15,8 +15,9 @@ class ConversationService:
     """List/save/delete conversations, broadcasting every change through the
     shared EventBroadcaster so every connected browser sees it live."""
 
-    def __init__(self, repository, broadcaster, attachment_repository=None, llm_client=None):
+    def __init__(self, repository, broadcaster, attachment_repository=None, llm_client=None, story_service=None):
         self.llm_client = llm_client
+        self.story_service = story_service
         self._title_lock = threading.Lock()
         self._pending_titles = set()
         self.attachment_repository = attachment_repository
@@ -41,14 +42,24 @@ class ConversationService:
             "turns": turns,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
+        story = self.story_service.get(session_id) if self.story_service else None
+        if story:
+            # A story is listed under its own title rather than an LLM-generated one.
+            conversation.update(title=story["title"], story=True)
         saved = self.repository.upsert(conversation)
+        if story and saved and saved.get("title") != story["title"]:
+            self.repository.rename(session_id, story["title"])
+            saved["title"] = story["title"]
         self.broadcaster.broadcast("upserted", saved or conversation)
-        self._schedule_title(session_id, turns, model)
+        if not story:
+            self._schedule_title(session_id, turns, model)
 
     def delete_conversation(self, session_id):
         self.repository.delete(session_id)
         if self.attachment_repository:
             self.attachment_repository.delete_session(session_id)
+        if self.story_service:
+            self.story_service.delete(session_id)
         self.broadcaster.broadcast("deleted", {"session_id": session_id})
 
     def get_session_memory(self, session_id):

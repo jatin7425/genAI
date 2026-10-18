@@ -100,12 +100,13 @@ export function useChatRegistry() {
   }, [])
 
   const sendMessage = useCallback(
-    (text: string, persona: string, model: string | null, options?: { retry?: boolean; attachments?: ChatAttachment[] }) => {
+    (text: string, persona: string, model: string | null, options?: { retry?: boolean; attachments?: ChatAttachment[]; sessionId?: string }) => {
       const trimmed = text.trim()
       if (!trimmed) return
 
-      const key = activeKey ?? crypto.randomUUID()
-      if (activeKey === null) setActiveKey(key)
+      // sessionId starts a conversation under an id the server already knows (a new story).
+      const key = options?.sessionId ?? activeKey ?? crypto.randomUUID()
+      if (key !== activeKey) setActiveKey(key)
 
       const controller = new AbortController()
       abortControllersRef.current.set(key, controller)
