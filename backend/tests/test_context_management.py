@@ -45,6 +45,20 @@ class ContextTests(unittest.TestCase):
         self.assertTrue(all(call['model'] in {'large', 'small'} for call in client.calls))
         self.assertIn(messages[-1], small)
 
+    def test_earlier_images_are_not_resent(self):
+        manager = ContextManager(SummaryClient({'big': 64000}))
+        image = {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,' + 'A' * 5000}}
+        messages = [{'role': 'system', 'content': 'Helpful'},
+                    {'role': 'user', 'content': [{'type': 'text', 'text': 'Look'}, image]},
+                    {'role': 'assistant', 'content': 'A red car.'},
+                    {'role': 'user', 'content': [{'type': 'text', 'text': 'And this?'}, image]}]
+        original = copy.deepcopy(messages)
+        prepared, _ = manager.prepare(messages, [], 'big')
+        users = [m for m in prepared if m['role'] == 'user']
+        self.assertFalse(any(p['type'] == 'image_url' for p in users[0]['content']))
+        self.assertIn(image, users[-1]['content'])
+        self.assertEqual(messages, original)
+
     def test_large_tool_results_are_excerpts_and_function_results_stay_paired(self):
         manager = ContextManager(SummaryClient())
         messages = [{'role': 'system', 'content': 'Helpful'}, {'role': 'user', 'content': 'Read this data'}, {'role': 'assistant', 'content': None, 'tool_calls': [tool('lookup', {}, 'one')]}, {'role': 'tool', 'tool_call_id': 'one', 'content': 'data ' * 20000}]

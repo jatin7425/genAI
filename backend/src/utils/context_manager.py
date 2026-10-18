@@ -91,7 +91,17 @@ class ContextManager:
         window = self.window(model)
         reply_tokens = min(4096, max(512, window // 5))
         input_budget = int(window * (0.6 if aggressive else 0.8)) - reply_tokens
+        latest_index = next((i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "user"), None)
         copied = copy.deepcopy(messages)
+        # Image pixels are sent only with the message that attached them; later
+        # turns rely on the assistant's earlier reply about the image.
+        for index, message in enumerate(copied):
+            if index != latest_index and isinstance(message.get("content"), list):
+                message["content"] = [
+                    {"type": "text", "text": "[Image shown earlier; pixels omitted to save context. Ask the user to reattach it if new visual details are needed.]"}
+                    if part.get("type") == "image_url" else part
+                    for part in message["content"]
+                ]
         # Tool excerpts remain paired with their function call and full originals
         # stay in session memory. Attachment IDs permit additional file reads.
         for message in copied:

@@ -136,4 +136,4 @@ class AttachmentService:
         end = start + min(20000, max(1, int(length)))
         return {**self.metadata(item), "text": item["text"][start:end], "offset": start,
                 "next_offset": end if end < len(item["text"]) else None,
-                "note": "This is an image; its visual content is included in the original message." if item["kind"] == "image" else ""}
+                "note": "This is an image; its pixels are sent only with the message that attached it. Ask the user to reattach it for new visual details." if item["kind"] == "image" else ""}
