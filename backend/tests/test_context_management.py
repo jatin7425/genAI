@@ -166,7 +166,8 @@ class ContextTests(unittest.TestCase):
     def test_provider_failure_switches_to_another_available_model(self):
         agent = orchestrator()
         client = ScriptedClient([ProviderError('provider_unavailable', 'Down', 'a'), ProviderError('provider_limit', 'Limit', 'b'), [{'content': 'Answer from c.'}]])
-        client.available_models = lambda: ['a', 'b', 'embed-x', 'c']
+        client.available_models = lambda: ['a', 'b', 'embed-x', 'whisper', 'c']
+        client._model_metadata = {'whisper': {'mode': 'audio_transcription'}, 'c': {'mode': 'chat'}}
         agent.llm_client = client
         events = []
         result = agent.run([agent.build_system_message(), {'role': 'user', 'content': 'Hi'}], model='a', on_event=lambda kind, content: events.append((kind, content)))

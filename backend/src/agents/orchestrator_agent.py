@@ -36,7 +36,10 @@ class orchestrator:
         """
         client = self.llm_client
         try:
-            candidates = [m for m in client.available_models() if m not in tried and "embed" not in m.lower()]
+            metadata = getattr(client, "_model_metadata", {})
+            # Skip embedding/audio models; the gateway marks chat models with mode "chat".
+            candidates = [m for m in client.available_models() if m not in tried and "embed" not in m.lower()
+                          and metadata.get(m, {}).get("mode", "chat") == "chat"]
             if code != "context_limit":
                 return candidates[0] if candidates else None
             current = client.context_window(model)

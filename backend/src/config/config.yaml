@@ -13,4 +13,9 @@ flags:
 # Set explicit verified limits for your deployed models here if needed.
 context:
   default_window: 8192
-  model_windows: {}
+  # The gateway's /v1/models publishes no limits; values from providers' model listings.
+  model_windows:
+    gemini-3.5-flash: 1048576
+    openai/gpt-oss-120b: 131072
+    aion-labs/aion-2.0: 131072
+    nvidia/nemotron-3-ultra-550b-a55b:free: 262144
